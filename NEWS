@@ -1,0 +1,12 @@
+Changes in version 1.10:
+
+The new option "--try-again" has been added.
+
+The size skipped when bad sectors are found has been made independent of
+"cluster-size".
+
+Rescue speed has been improved for large logfiles.
+
+An overflow reading from devices of undefined size has been fixed.
+
+"make install-info" should now work on Debian and OS X.
