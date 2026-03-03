@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2023 Antonio Diaz Diaz.
+   Copyright (C) 2004-2024 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -16,7 +16,7 @@
 */
 /*
    Exit status: 0 for a normal exit, 1 for environmental problems
-   (file not found, invalid command line options, I/O errors, etc), 2 to
+   (file not found, invalid command-line options, I/O errors, etc), 2 to
    indicate a corrupt or invalid input file, 3 for an internal consistency
    error (e.g., bug) which caused ddrescue to panic.
 */
@@ -105,8 +105,8 @@ void show_help( const int cluster, const int hardbs )
                "  -G, --generate-mode            generate approximate mapfile from partial copy\n"
                "  -H, --test-mode=<file>         set map of good/bad blocks from given mapfile\n"
                "  -i, --input-position=<bytes>   starting position of domain in input file [0]\n"
-               "  -I, --verify-input-size        verify input file size with size in mapfile\n"
-               "  -J, --verify-on-error          reread latest good sector after every error\n"
+               "  -I, --check-input-size         compare input file size with size in mapfile\n"
+               "  -J, --check-on-error           reread latest good sector after every error\n"
                "  -K, --skip-size=[<i>][,<max>]  initial,maximum size to skip on read error\n"
                "  -L, --loose-domain             accept unordered domain mapfile with gaps\n"
                "  -m, --domain-mapfile=<file>    restrict domain to finished blocks in <file>\n"
@@ -149,7 +149,7 @@ void show_help( const int cluster, const int hardbs )
                "multiplier: s = sectors, k = 1000, Ki = 1024, M = 10^6, Mi = 2^20, etc...\n"
                "Time intervals have the format 1[.5][smhd] or 1/2[smhd].\n"
                "\nExit status: 0 for a normal exit, 1 for environmental problems\n"
-               "(file not found, invalid command line options, I/O errors, etc), 2 to\n"
+               "(file not found, invalid command-line options, I/O errors, etc), 2 to\n"
                "indicate a corrupt or invalid input file, 3 for an internal consistency\n"
                "error (e.g., bug) which caused ddrescue to panic.\n"
                "\nReport bugs to bug-ddrescue@gnu.org\n"
@@ -184,9 +184,8 @@ Rational parse_rational_time( const char * const arg,
       case 's':
       case  0 : break;
       case ',': if( comma ) break;			// fall through
-      default :
-        show_option_error( arg, "Bad unit in time interval argument of",
-                           option_name ); std::exit( 1 );
+      default: show_option_error( arg, "Bad unit in time interval argument of",
+                                  option_name ); std::exit( 1 );
       }
     if( !comma && arg[c] != 0 && arg[c] != ',' && arg[c+1] == ',' )
       { show_option_error( arg, "Extra characters in argument of",
@@ -469,7 +468,7 @@ int do_rescue( const long long offset, Domain & domain,
                const int cluster, const int hardbs, const int o_direct_out,
                const int o_trunc, const bool ask, const bool command_mode,
                const bool preallocate, const bool synchronous,
-               const bool verify_input_size )
+               const bool check_input_size )
   {
   if( rb_opts.same_file && o_trunc )
     {
@@ -488,13 +487,13 @@ int do_rescue( const long long offset, Domain & domain,
   Rescuebook rescuebook( offset, insize, domain, test_domain, mb_opts, rb_opts,
                          iname, oname, mapname, cluster, hardbs, synchronous );
 
-  if( verify_input_size )
+  if( check_input_size )
     {
     if( !rescuebook.mapfile_exists() || insize <= 0 ||
         rescuebook.mapfile_insize() <= 0 ||
         rescuebook.mapfile_insize() >= LLONG_MAX )
       {
-      show_error( "Can't verify input file size.\n"
+      show_error( "Can't check input file size.\n"
                   "          Mapfile is unfinished or missing, or size is invalid." );
       return 1;
       }
@@ -537,7 +536,7 @@ int do_rescue( const long long offset, Domain & domain,
       { show_file_error( oname, "Can't preallocate output file", errno );
         return 1; }
 #else
-    show_file_error( oname, "warning: Preallocation not available." );
+    show_file_error( oname, "warning: preallocation not available." );
 #endif
     }
 
@@ -761,13 +760,13 @@ int main( const int argc, const char * const argv[] )
   bool loose = false;
   bool preallocate = false;
   bool synchronous = false;
-  bool verify_input_size = false;
+  bool check_input_size = false;
   if( argc > 0 ) invocation_name = argv[0];
   command_line = invocation_name;
   for( int i = 1; i < argc; ++i )
     { command_line += ' '; command_line += argv[i]; }
 
-  enum { opt_ask = 256, opt_cm, opt_cpa, opt_ds, opt_eoe, opt_eve, opt_mi,
+  enum { opt_ask = 256, opt_cm, opt_cpa, opt_ds, opt_eve, opt_mi,
          opt_msr, opt_poe, opt_pop, opt_rat, opt_rea, opt_rs, opt_sf };
   const Arg_parser::Option options[] =
     {
@@ -788,7 +787,9 @@ int main( const int argc, const char * const argv[] )
     { 'h', "help",                 Arg_parser::no  },
     { 'H', "test-mode",            Arg_parser::yes },
     { 'i', "input-position",       Arg_parser::yes },
+    { 'I', "check-input-size",     Arg_parser::no  },
     { 'I', "verify-input-size",    Arg_parser::no  },
+    { 'J', "check-on-error",       Arg_parser::no  },
     { 'J', "verify-on-error",      Arg_parser::no  },
     { 'K', "skip-size",            Arg_parser::yes },
     { 'L', "loose-domain",         Arg_parser::no  },
@@ -820,7 +821,6 @@ int main( const int argc, const char * const argv[] )
     { opt_cm,  "command-mode",     Arg_parser::no  },
     { opt_cpa, "cpass",            Arg_parser::yes },
     { opt_ds,  "delay-slow",       Arg_parser::yes },
-    { opt_eoe, "exit-on-error",    Arg_parser::no  },
     { opt_eve, "log-events",       Arg_parser::yes },
     { opt_mi,  "mapfile-interval", Arg_parser::yes },
     { opt_msr, "max-slow-reads",   Arg_parser::yes },
@@ -866,8 +866,8 @@ int main( const int argc, const char * const argv[] )
                 return 0;
       case 'H': set_name( &test_mode_mapfile_name, arg, pn ); break;
       case 'i': ipos = getnum( arg, pn, hardbs, 0 ); break;
-      case 'I': verify_input_size = true; break;
-      case 'J': rb_opts.verify_on_error = true; break;
+      case 'I': check_input_size = true; break;
+      case 'J': rb_opts.check_on_error = true; break;
       case 'K': parse_skipbs( arg, pn, rb_opts, hardbs ); break;
       case 'L': loose = true; break;
       case 'm': set_name( &domain_mapfile_name, arg, pn ); break;
@@ -899,7 +899,6 @@ int main( const int argc, const char * const argv[] )
       case opt_cm:  set_mode( program_mode, m_command ); break;
       case opt_cpa: parse_cpass( arg, pn, rb_opts ); break;
       case opt_ds:  rb_opts.delay_slow = parse_time_interval( arg, pn ); break;
-      case opt_eoe: rb_opts.max_read_errors = 0; break;
       case opt_eve: event_logger.set_filename( arg ); break;
       case opt_mi:  parse_mapfile_intervals( arg, pn, mb_opts ); break;
       case opt_msr: rb_opts.max_slow_reads = getnum( arg, pn, 0, 0, LONG_MAX );
@@ -910,7 +909,7 @@ int main( const int argc, const char * const argv[] )
       case opt_rea: read_logger.set_filename( arg ); break;
       case opt_rs:  rb_opts.reset_slow = true; break;
       case opt_sf:  rb_opts.same_file = true; break;
-      default : internal_error( "uncaught option." );
+      default: internal_error( "uncaught option." );
       }
     } // end process options
 
@@ -945,8 +944,8 @@ int main( const int argc, const char * const argv[] )
         { show_error( "Option '--same-file' is incompatible with fill mode.", 0, true );
         return 1; }
       if( rb_opts != Rb_options() || test_mode_mapfile_name ||
-          verify_input_size || preallocate || o_trunc )
-        show_error( "warning: Options -aACdeEHIJKlMnOpPrRStTuWxX are ignored in fill mode." );
+          check_input_size || preallocate || o_trunc )
+        show_error( "warning: options -aACdeEHIJKlMnOpPrRStTuWxX are ignored in fill mode." );
       return do_fill( opos - ipos, domain, fb_opts, mb_opts, iname, oname,
                       mapname, cluster, hardbs, o_direct_out, synchronous );
     case m_generate:
@@ -954,9 +953,9 @@ int main( const int argc, const char * const argv[] )
         { show_error( "Option '--ask' is incompatible with generate mode.", 0, true );
           return 1; }
       if( fb_opts != Fb_options() || rb_opts != Rb_options() || synchronous ||
-          test_mode_mapfile_name || verify_input_size || preallocate ||
+          test_mode_mapfile_name || check_input_size || preallocate ||
           o_direct_out || o_trunc )
-        show_error( "warning: Options -aACdDeEHIJKlMnOpPrRStTuwWxXy are ignored in generate mode." );
+        show_error( "warning: options -aACdDeEHIJKlMnOpPrRStTuwWxXy are ignored in generate mode." );
       return do_generate( opos - ipos, domain, mb_opts, iname, oname, mapname,
                           cluster, hardbs );
     case m_command:
@@ -970,7 +969,7 @@ int main( const int argc, const char * const argv[] )
                         test_mode_mapfile_name ? &test_domain : 0, mb_opts,
                         rb_opts, iname, oname, mapname, cluster, hardbs,
                         o_direct_out, o_trunc, ask, program_mode == m_command,
-                        preallocate, synchronous, verify_input_size );
+                        preallocate, synchronous, check_input_size );
       }
     }
   }

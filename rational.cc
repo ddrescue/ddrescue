@@ -1,5 +1,5 @@
 /* Rational - Rational number class with overflow detection
-   Copyright (C) 2005-2023 Antonio Diaz Diaz.
+   Copyright (C) 2005-2024 Antonio Diaz Diaz.
 
    This library is free software. Redistribution and use in source and
    binary forms, with or without modification, are permitted provided
@@ -104,7 +104,7 @@ void Rational::normalize()
 
 Rational Rational::inverse() const
   {
-  if( den <= 0 ) return *this;			// no op on error
+  if( den <= 0 ) return *this;			// no-op on error
   Rational tmp;
   if( num > 0 ) { tmp.num = den; tmp.den = num; }
   else if( num < 0 ) { tmp.num = -den; tmp.den = -num; }
@@ -115,7 +115,7 @@ Rational Rational::inverse() const
 
 Rational & Rational::operator+=( const Rational & r )
   {
-  if( den <= 0 ) return *this;			// no op on error
+  if( den <= 0 ) return *this;			// no-op on error
   if( r.den <= 0 ) { num = r.num; den = 0; return *this; }	// set error
 
   long long new_den = den; new_den *= r.den;
@@ -128,7 +128,7 @@ Rational & Rational::operator+=( const Rational & r )
 
 Rational & Rational::operator*=( const Rational & r )
   {
-  if( den <= 0 ) return *this;			// no op on error
+  if( den <= 0 ) return *this;			// no-op on error
   if( r.den <= 0 ) { num = r.num; den = 0; return *this; }	// set error
 
   long long new_num = num; new_num *= r.num;

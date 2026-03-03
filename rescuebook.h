@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2023 Antonio Diaz Diaz.
+   Copyright (C) 2004-2024 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -79,7 +79,7 @@ struct Rb_options
   bool sparse;
   bool try_again;
   bool unidirectional;
-  bool verify_on_error;
+  bool check_on_error;
 
   Rb_options()
     : max_max_skipbs( 1LL << 60 ), max_error_rate( -1 ), min_outfile_size( -1 ),
@@ -93,7 +93,7 @@ struct Rb_options
       reopen_on_error( false ), reset_slow( false ), retrim( false ),
       reverse( false ), same_file( false ), simulated_poe( false ),
       sparse( false ), try_again( false ), unidirectional( false ),
-      verify_on_error( false )
+      check_on_error( false )
       {}
 
   bool operator==( const Rb_options & o ) const
@@ -123,7 +123,7 @@ struct Rb_options
                simulated_poe == o.simulated_poe &&
                sparse == o.sparse && try_again == o.try_again &&
                unidirectional == o.unidirectional &&
-               verify_on_error == o.verify_on_error ); }
+               check_on_error == o.check_on_error ); }
   bool operator!=( const Rb_options & o ) const
     { return !( *this == o ); }
   };

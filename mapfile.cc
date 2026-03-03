@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2023 Antonio Diaz Diaz.
+   Copyright (C) 2004-2024 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -186,12 +186,12 @@ void Mapfile::join_subsectors( const int hardbs )
     if( Sblock::processed_state( st1 ) <= Sblock::processed_state( st2 ) )
       {
       if( sb2.size() > hardbs - rest )		// move subsector to sb1
-        { sb1.shift_boundary( sb2, boundary + hardbs - rest ); ++i; continue; }
+        { sb1.move_boundary( sb2, boundary + hardbs - rest ); ++i; continue; }
       }
     else
       {
       if( sb1.size() > rest )			// move subsector to sb2
-        { sb1.shift_boundary( sb2, boundary - rest ); ++i; continue; }
+        { sb1.move_boundary( sb2, boundary - rest ); ++i; continue; }
       sb1.status( st2 );			// keep status of sb2
       }
     sb1.enlarge( sb2.size() );			// join both blocks
@@ -300,7 +300,8 @@ bool Mapfile::truncate_vector( const long long end, const bool force )
       if( !force && sb.status() == Sblock::finished ) return false;
       sb.size( end - sb.pos() );
       }
-    sblock_vector.erase( sblock_vector.begin() + i, sblock_vector.end() );
+    if( i < sblock_vector.size() )
+      sblock_vector.erase( sblock_vector.begin() + i, sblock_vector.end() );
     }
   return true;
   }
@@ -607,7 +608,7 @@ int Mapfile::change_chunk_status( const Block & b, const Sblock::Status st,
         index_ + 1 < sblocks() && sblock_vector[index_+1].status() == st &&
         domain.includes( sblock_vector[index_+1] ) )
       {
-      sblock_vector[index_].shift_boundary( sblock_vector[index_+1], b.pos() );
+      sblock_vector[index_].move_boundary( sblock_vector[index_+1], b.pos() );
       return 0;
       }
     insert_sblock( index_, sblock_vector[index_].split( b.pos() ) );
@@ -618,7 +619,7 @@ int Mapfile::change_chunk_status( const Block & b, const Sblock::Status st,
     {
     if( index_ > 0 && sblock_vector[index_-1].status() == st &&
         domain.includes( sblock_vector[index_-1] ) )
-      sblock_vector[index_-1].shift_boundary( sblock_vector[index_], b.end() );
+      sblock_vector[index_-1].move_boundary( sblock_vector[index_], b.end() );
     else
       insert_sblock( index_,
                      Sblock( sblock_vector[index_].split( b.end() ), st ) );

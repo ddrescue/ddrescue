@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2023 Antonio Diaz Diaz.
+   Copyright (C) 2004-2024 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -168,7 +168,7 @@ int Rescuebook::copy_block( const Block & b, int & copied_size, int & error_size
 
   read_logger.print_line( b.pos(), b.size(), copied_size, error_size );
 
-  if( verify_on_error )
+  if( check_on_error )
     {
     if( copied_size >= hardbs() && b.pos() % hardbs() == 0 )
       { voe_ipos = b.pos(); std::memcpy( voe_buf, iobuf(), hardbs() ); }
@@ -927,6 +927,7 @@ int Rescuebook::do_rescue( const int ides, const int odes )
     retval = scrape_errors();
   if( retval == 0 && bad_size && max_retries != 0 && !errors_or_timeout() )
     retval = copy_errors();
+  fsync( odes_ );	// prevent early exit if kernel caches writes
   if( !rates_updated ) update_rates( true );	// force update of e_code
   show_status( -1, retval ? 0 : "\nFinished", true );
 
@@ -975,13 +976,13 @@ int Rescuebook::do_rescue( const int ides, const int odes )
                           status_name( current_status() ) );
   if( !event_logger.close_file() )
     show_file_error( event_logger.filename(),
-                     "warning: Error closing the events logging file." );
+                     "warning: error closing the events logging file." );
   if( !rate_logger.close_file() )
     show_file_error( rate_logger.filename(),
-                     "warning: Error closing the rates logging file." );
+                     "warning: error closing the rates logging file." );
   if( !read_logger.close_file() )
     show_file_error( read_logger.filename(),
-                     "warning: Error closing the reads logging file." );
+                     "warning: error closing the reads logging file." );
   if( retval ) return retval;		// errors have priority over signals
   if( signaled ) return signaled_exit();
   return 0;

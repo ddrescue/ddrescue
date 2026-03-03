@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2013-2023 Antonio Diaz Diaz.
+   Copyright (C) 2013-2024 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -33,7 +33,7 @@ namespace {
 
 const char * format_time_dhms( const long long t )
   {
-  static char buf[64];			// keep gcc quiet
+  static char buf[64];
   const int s = t % 60;
   const int m = ( t / 60 ) % 60;
   const int h = ( t / 3600 ) % 24;
