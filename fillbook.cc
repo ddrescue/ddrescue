@@ -1,6 +1,6 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
-    Antonio Diaz Diaz.
+    Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012,
+    2013 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -40,7 +40,7 @@ int Fillbook::fill_areas( const std::string & filltypes )
     if( !domain().includes( sb ) ) { if( domain() < sb ) break; else continue; }
     if( sb.end() <= current_pos() ||
         filltypes.find( sb.status() ) >= filltypes.size() ) continue;
-    Block b( sb.pos(), softbs() );
+    Block b( sb.pos(), softbs() );	// fill the area a softbs at a time
     if( sb.includes( current_pos() ) ) b.pos( current_pos() );
     if( b.end() > sb.end() ) b.crop( sb );
     current_status( filling );
@@ -51,7 +51,12 @@ int Fillbook::fill_areas( const std::string & filltypes )
         { show_status( b.pos(), first_post ); first_post = false; }
       if( interrupted() ) return -1;
       const int retval = fill_block( b );
-      if( retval ) return retval;
+      if( retval )					// write error
+        {
+        if( !ignore_write_errors_ ) return retval;
+        if( b.size() > hardbs() )	// fill the area a hardbs at a time
+          { b.size( hardbs() ); continue; }
+        }
       if( !update_logfile( odes_ ) ) return -2;
       b.pos( b.end() );
       if( b.end() > sb.end() ) b.crop( sb );
@@ -104,8 +109,8 @@ int Fillbook::do_fill( const int odes, const std::string & filltypes )
     {
     show_status( -1, true );
     if( retval == 0 ) std::printf( "Finished" );
-    else if( retval == -2 ) std::printf( "Logfile error" );
-    else if( retval < 0 ) std::printf( "Interrupted by user" );
+    else if( retval == -2 ) std::printf( "\nLogfile error" );
+    else if( retval < 0 ) std::printf( "\nInterrupted by user" );
     std::fputc( '\n', stdout );
     }
   if( retval == -2 ) retval = 1;		// logfile error

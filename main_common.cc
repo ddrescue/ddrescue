@@ -1,6 +1,6 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
-    Antonio Diaz Diaz.
+    Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012,
+    2013 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@
 
 namespace {
 
+const char * const program_year = "2013";
 std::string command_line;
 
 
@@ -31,7 +32,7 @@ void show_version()
   }
 
 
-long long getnum( const char * const ptr, const int bs,
+long long getnum( const char * const ptr, const int hardbs,
                   const long long min = LLONG_MIN + 1,
                   const long long max = LLONG_MAX )
   {
@@ -52,7 +53,8 @@ long long getnum( const char * const ptr, const int bs,
     switch( tail[0] )
       {
       case ' ': break;
-      case 'b': if( bs > 0 ) { factor = bs; exponent = 1; }
+      case 'b':
+      case 's': if( hardbs > 0 ) { factor = hardbs; exponent = 1; }
                 else bad_multiplier = true;
                 break;
       case 'Y': exponent = 8; break;

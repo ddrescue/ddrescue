@@ -1,6 +1,6 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
-    Antonio Diaz Diaz.
+    Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012,
+    2013 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -35,6 +35,16 @@
 
 
 namespace {
+
+void input_pos_error( const long long pos, const long long isize )
+  {
+  char buf[128];
+  snprintf( buf, sizeof buf,
+            "Can't start reading at pos %lld.\n"
+            "          Input file is only %lld bytes long.", pos, isize );
+  show_error( buf );
+  }
+
 
 int my_fgetc( FILE * const f )
   {
@@ -97,12 +107,22 @@ void extend_sblock_vector( std::vector< Sblock > & sblock_vector,
     {
     if( back.pos() >= isize )
       {
-      if( back.pos() == isize && back.status() == Sblock::non_tried )
+      if( back.pos() == isize && back.status() != Sblock::finished )
         { sblock_vector.pop_back(); return; }
-      show_error( "Bad logfile; last block begins past end of input file." );
+      show_error( "Last block in logfile begins past end of input file.\n"
+                  "          Use '-C' if you are reading from a partial copy.",
+                  0, true );
       std::exit( 1 );
       }
-    if( end < 0 || end > isize ) back.size( isize - back.pos() );
+    if( end > isize )
+      {
+      if( back.status() != Sblock::finished )
+        { back.size( isize - back.pos() ); return; }
+      show_error( "Rescued data in logfile goes past end of input file.\n"
+                  "          Use '-C' if you are reading from a partial copy.",
+                  0, true );
+      std::exit( 1 );
+      }
     else if( end < isize )
       sblock_vector.push_back( Sblock( end, isize - end, Sblock::non_tried ) );
     }
@@ -118,7 +138,7 @@ void extend_sblock_vector( std::vector< Sblock > & sblock_vector,
 void show_logfile_error( const char * const filename, const int linenum )
   {
   char buf[80];
-  snprintf( buf, sizeof buf, "error in logfile %s, line %d", filename, linenum );
+  snprintf( buf, sizeof buf, "error in logfile %s, line %d.", filename, linenum );
   show_error( buf );
   }
 
@@ -134,7 +154,7 @@ bool read_logfile( const char * const logname,
   int linenum = 0;
   sblock_vector.clear();
 
-  const char *line = my_fgets( f, linenum );
+  const char * line = my_fgets( f, linenum );
   if( line )						// status line
     {
     char ch;
@@ -195,7 +215,8 @@ Domain::Domain( const long long p, const long long s,
     const Sblock & sb = sblock_vector[i];
     if( sb.status() == Sblock::finished ) block_vector.push_back( sb );
     }
-  this->crop( b );
+  if( block_vector.size() == 0 ) block_vector.push_back( Block( 0, 0 ) );
+  else this->crop( b );
   }
 
 
@@ -223,7 +244,7 @@ Logbook::Logbook( const long long offset, const long long isize,
     current_status_( copying ), domain_( dom ), filename_( logname ),
     hardbs_( hardbs ), softbs_( cluster * hardbs ),
     final_msg_( 0 ), final_errno_( 0 ), index_( 0 ),
-    ul_t1( std::time( 0 ) )
+    ul_t1( std::time( 0 ) ), logfile_exists_( false )
   {
   int alignment = sysconf( _SC_PAGESIZE );
   if( alignment < hardbs_ || alignment % hardbs_ ) alignment = hardbs_;
@@ -235,11 +256,19 @@ Logbook::Logbook( const long long offset, const long long isize,
     if( disp > 0 && disp < alignment ) iobuf_ += disp;
     }
 
-  if( !domain_.crop_by_file_size( isize ) ) std::exit( 1 );
-  if( filename_ && !do_not_read &&
-      read_logfile( filename_, sblock_vector, current_pos_, current_status_ ) &&
-      sblock_vector.size() )
-    logfile_isize_ = sblock_vector.back().end();
+  if( isize > 0 )
+    {
+    if( domain_.pos() >= isize )
+      { input_pos_error( domain_.pos(), isize ); std::exit( 1 ); }
+    domain_.crop_by_file_size( isize );
+    }
+  if( filename_ && !do_not_read )
+    {
+    logfile_exists_ =
+      read_logfile( filename_, sblock_vector, current_pos_, current_status_ );
+    if( logfile_exists_ && sblock_vector.size() )
+      logfile_isize_ = sblock_vector.back().end();
+    }
   if( !complete_only ) extend_sblock_vector( sblock_vector, isize );
   else if( sblock_vector.size() )  // limit domain to blocks read from logfile
     {
@@ -280,7 +309,7 @@ bool Logbook::update_logfile( const int odes, const bool force,
                               const bool retry )
   {
   if( !filename_ ) return true;
-  const int interval = 30 + std::min( 270, sblocks() / 38 );
+  const int interval = 30 + std::min( 270, sblocks() / 38 );	// 30s to 5m
   const long t2 = std::time( 0 );
   if( !force && t2 - ul_t1 < interval ) return true;
   ul_t1 = t2;
@@ -297,9 +326,9 @@ bool Logbook::update_logfile( const int odes, const bool force,
   if( verbosity >= 0 )
     {
     char buf[80];
-    const char * const s = ( f ? "Error writing logfile '%s'" :
-                                 "Error opening logfile '%s' for writing" );
-    snprintf( buf, sizeof buf, s, filename_ );
+    snprintf( buf, sizeof buf, f ? "Error writing logfile '%s'." :
+                                   "Error opening logfile '%s' for writing.",
+              filename_ );
     if( retry ) std::fprintf( stderr, "\n" );
     show_error( buf, errno );
     if( retry )
@@ -336,21 +365,32 @@ void Logbook::write_logfile( FILE * const f ) const
   }
 
 
-void Logbook::truncate_vector( const long long pos )
+// Returns false only if truncation would remove finished blocks and
+// force is false.
+//
+bool Logbook::truncate_vector( const long long end, const bool force )
   {
   int i = sblocks() - 1;
-  while( i >= 0 && sblock_vector[i].pos() >= pos ) --i;
+  while( i >= 0 && sblock_vector[i].pos() >= end ) --i;
   if( i < 0 )
     {
     sblock_vector.clear();
-    sblock_vector.push_back( Sblock( pos, 0, Sblock::non_tried ) );
+    sblock_vector.push_back( Sblock( 0, 0, Sblock::non_tried ) );
     }
   else
     {
+    if( !force )
+      for( unsigned j = i + 1; j < sblock_vector.size(); ++j )
+        if( sblock_vector[j].status() == Sblock::finished ) return false;
     Sblock & sb = sblock_vector[i];
-    if( sb.includes( pos ) ) sb.size( pos - sb.pos() );
+    if( sb.includes( end ) )
+      {
+      if( !force && sb.status() == Sblock::finished ) return false;
+      sb.size( end - sb.pos() );
+      }
     sblock_vector.erase( sblock_vector.begin() + i + 1, sblock_vector.end() );
     }
+  return true;
   }
 
 
@@ -363,6 +403,36 @@ int Logbook::find_index( const long long pos ) const
     --index_;
   if( !sblock_vector[index_].includes( pos ) ) index_ = -1;
   return index_;
+  }
+
+
+int Logbook::find_largest_sblock( const Sblock::Status st ) const
+  {
+  long long size = 0;
+  int index = -1;
+  for( int i = 0; i < sblocks(); ++i )
+    {
+    const Sblock & sb = sblock_vector[i];
+    if( sb.status() == st && sb.size() > size && domain_.includes( sb ) )
+      { size = sb.size(); index = i; }
+    }
+  return index;
+  }
+
+
+int Logbook::find_smallest_sblock( const Sblock::Status st ) const
+  {
+  long long size = LLONG_MAX;
+  int index = -1;
+  for( int i = 0; i < sblocks(); ++i )
+    {
+    const Sblock & sb = sblock_vector[i];
+    if( sb.status() == st &&
+        ( sb.size() < size || ( sb.size() == size && index < 0 ) ) &&
+        domain_.includes( sb ) )
+      { size = sb.size(); index = i; if( size <= hardbs_ ) break; }
+    }
+  return index;
   }
 
 
