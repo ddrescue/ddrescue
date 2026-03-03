@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2025 Antonio Diaz Diaz.
+   Copyright (C) 2004-2026 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -17,20 +17,16 @@
 
 #define _FILE_OFFSET_BITS 64
 
-#include <algorithm>
 #include <cctype>
 #include <cerrno>
-#include <climits>
-#include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
-#include <string>
-#include <vector>
 #include <stdint.h>
 #include <termios.h>
 #include <unistd.h>
 
-#include "block.h"
+#include "mapfile.h"
 #include "mapbook.h"
 
 
@@ -38,11 +34,14 @@ namespace {
 
 void input_pos_error( const long long pos, const long long insize )
   {
-  char buf[128];
+  char buf[160];
+  const char * const p = format_num3( pos );
+  const int len = std::strlen( p );
+
   snprintf( buf, sizeof buf,
             "Can't start reading at pos %s.\n"
-            "          Input file is only %s bytes long.",
-            format_num3( pos ), format_num3( insize ) );
+            "          Size of input file is only %*s bytes.",
+            p, len, format_num3( insize ) );
   show_error( buf );
   }
 
@@ -152,7 +151,7 @@ bool Mapbook::update_mapfile( const int odes, const bool force )
   const long long t2 = std::time( 0 );
   if( um_t1 == 0 || um_t1 > t2 ) um_t1 = um_t1s = t2;	// initialize
   if( !force && t2 - um_t1 < interval ) return true;
-  const bool mf_sync = ( force || t2 - um_t1s >= mapfile_sync_interval );
+  const bool mf_sync = force || t2 - um_t1s >= mapfile_sync_interval;
   if( odes >= 0 ) fsync( odes );
   if( um_prev_mf_sync )
     {

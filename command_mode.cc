@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2025 Antonio Diaz Diaz.
+   Copyright (C) 2004-2026 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -17,21 +17,16 @@
 
 #define _FILE_OFFSET_BITS 64
 
-#include <algorithm>
 #include <cctype>
 #include <cerrno>
-#include <climits>
-#include <cstdio>
 #include <cstring>
-#include <string>
-#include <vector>
 #include <stdint.h>
 #include <unistd.h>
 #include <sys/stat.h>
 
-#include "rational.h"
-#include "block.h"
+#include "mapfile.h"
 #include "mapbook.h"
+#include "rational.h"
 #include "rescuebook.h"
 
 
@@ -65,7 +60,7 @@ int Rescuebook::copy_command( const char * const command )
                            Sblock::bad_sector );
       struct stat istat;
       if( stat( iname_, &istat ) != 0 )
-        { final_msg( iname_, "Input file disappeared", errno ); retval = 1; }
+        { final_msg( iname_, disap_msg, errno ); retval = 1; }
       }
     if( retval ) return retval;
     }
@@ -116,7 +111,7 @@ int Rescuebook::do_commands( const int ides, const int odes )
       }
     if( command == "q" ) break;
     int tmp = 0;		// -1 finish, 0 OK, 1 error, 2 fatal error
-    const bool finish = ( command == "f" );
+    const bool finish = command == "f";
     if( finish || command == "u" )
       {
       if( finish ) compact_sblock_vector();

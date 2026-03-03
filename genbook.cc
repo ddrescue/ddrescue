@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2025 Antonio Diaz Diaz.
+   Copyright (C) 2004-2026 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -17,35 +17,35 @@
 
 #define _FILE_OFFSET_BITS 64
 
-#include <algorithm>
 #include <cerrno>
-#include <climits>
-#include <cstdio>
 #include <cstring>
 #include <ctime>
-#include <string>
-#include <vector>
 #include <stdint.h>
 #include <unistd.h>
 
-#include "block.h"
+#include "mapfile.h"
 #include "mapbook.h"
 
 
 const char * format_time( const long long t, const bool low_prec )
   {
   enum { buffers = 8, bufsize = 16 };
-  static char buffer[buffers][bufsize];	// circle of static buffers for printf
+  static char buffer[buffers][bufsize];	// circle of buffers for printf
   static int current = 0;
   if( t < 0 ) return "n/a";
   char * const buf = buffer[current++]; current %= buffers;
   const int s = t % 60;
   const int m = ( t / 60 ) % 60;
   const int h = ( t / 3600 ) % 24;
-  const long long d = t / 86400;
+  const int d = ( t / 86400 ) % 365;
+  const long long y = t / 31536000;
   int len = 0;				// max len is 11 chars (10h 10m 10s)
 
-  if( d > 0 ) len = snprintf( buf, bufsize, "%lldd", d );
+  if( y > 0 ) len = snprintf( buf, bufsize, "%lldy", y );
+  if( len >= 7 ) return buf;
+  if( d > 0 && len >= 0 )
+    { len += snprintf( buf + len, bufsize - len, "%s%dd", len ? ( (d < 10) ? "  " : " " ) : "", d );
+      if( y > 0 ) return buf; }
   if( h > 0 && len >= 0 && len <= 7 )
     len += snprintf( buf + len, bufsize - len, "%s%dh", len ? ( (h < 10) ? "  " : " " ) : "", h );
   if( m > 0 && len >= 0 && len <= 7 )
@@ -170,23 +170,23 @@ int Genbook::do_generate( const int odes )
     const Sblock & sb = sblock( i );
     if( !domain().includes( sb ) )
       { if( domain() < sb ) break; else continue; }
-    if( sb.status() == Sblock::finished ) finished_size += sb.size();
-    if( sb.status() != Sblock::non_tried ) gensize += sb.size();
+    if( sb.status() == sb.finished ) finished_size += sb.size();
+    if( sb.status() != sb.non_tried ) gensize += sb.size();
     }
   set_signals();
   if( verbosity >= 0 )
     {
-    std::fputs( "Press Ctrl-C to interrupt\n", stdout );
+    std::fputs( ctrlc_msg, stdout );
     if( mapfile_exists() )
       {
-      std::fputs( "Initial status (read from mapfile)\n", stdout );
+      std::fputs( initial_msg, stdout );
       std::printf( "rescued: %9sB,  generated: %9sB\n",
                    format_num( finished_size ), format_num( gensize ) );
       std::fputs( "Current status\n", stdout );
       }
     }
   int retval = check_all();
-  const bool signaled = ( retval == -1 );
+  const bool signaled = retval == -1;
   if( signaled ) retval = 0;
   if( verbosity >= 0 )
     {
