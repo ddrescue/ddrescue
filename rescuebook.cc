@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2019 Antonio Diaz Diaz.
+    Copyright (C) 2004-2020 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -94,8 +94,14 @@ bool Rescuebook::extend_outfile_size()
     if( size < 0 ) return false;
     if( min_size > size )
       {
-      const uint8_t zero = 0;
-      if( writeblockp( odes_, &zero, 1, min_size - 1 ) != 1 ) return false;
+      int ret;
+      do ret = ftruncate( odes_, min_size );
+        while( ret != 0 && errno == EINTR );
+      if( ret != 0 || lseek( odes_, 0, SEEK_END ) != min_size )
+        {
+        const uint8_t zero = 0;		// if ftruncate fails, write a zero
+        if( writeblockp( odes_, &zero, 1, min_size - 1 ) != 1 ) return false;
+        }
       fsync( odes_ );
       }
     }
@@ -442,7 +448,7 @@ int Rescuebook::trim_errors()
   for( long i = 0; i < sblocks(); )
     {
     const long idx = reverse ? sblocks() - 1 - i : i;
-    const Sblock sb = sblock( idx );
+    const Sblock sb( sblock( idx ) );
     if( !domain().includes( sb ) )
       { if( ( !reverse && domain() < sb ) || ( reverse && domain() > sb ) )
           break;
@@ -510,7 +516,7 @@ int Rescuebook::scrape_errors()
 
   for( long i = 0; i < sblocks(); )
     {
-    const Sblock sb = sblock( reverse ? sblocks() - 1 - i : i );
+    const Sblock sb( sblock( reverse ? sblocks() - 1 - i : i ) );
     if( !domain().includes( sb ) )
       { if( ( !reverse && domain() < sb ) || ( reverse && domain() > sb ) )
           break;
@@ -793,7 +799,7 @@ Rescuebook::Rescuebook( const long long offset, const long long insize,
                         const int cluster, const int hardbs,
                         const bool synchronous )
   : Mapbook( offset, insize, dom, mb_opts, mapname, cluster, hardbs,
-             rb_opts.complete_only ),
+             rb_opts.complete_only, true ),
     Rb_options( rb_opts ),
     error_rate( 0 ),
     error_sum( 0 ),
@@ -878,8 +884,9 @@ int Rescuebook::do_rescue( const int ides, const int odes )
                        format_num( sblock( sblocks() - 1 ).size() ) );
         }
       if( domain().pos() > 0 || domain().end() < mapfile_insize() )
-        std::printf( "(sizes limited to domain %lld B to %lld B of %lld B)\n",
-                     domain().pos(), domain().end(), mapfile_insize() );
+        std::printf( "(sizes limited to domain from %s B to %s B of %s B)\n",
+                     format_num3( domain().pos() ), format_num3( domain().end() ),
+                     format_num3( mapfile_insize() ) );
       std::printf( "rescued: %sB, tried: %sB, bad-sector: %sB, bad areas: %lu\n\n",
                    format_num( finished_size ),
                    format_num( non_trimmed_size + non_scraped_size + bad_size ),

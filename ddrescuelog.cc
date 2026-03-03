@@ -1,5 +1,5 @@
 /*  GNU ddrescuelog - Tool for ddrescue mapfiles
-    Copyright (C) 2011-2019 Antonio Diaz Diaz.
+    Copyright (C) 2011-2020 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -30,7 +30,6 @@
 #include <ctime>
 #include <string>
 #include <vector>
-#include <stdint.h>
 
 #include "arg_parser.h"
 #include "block.h"
@@ -40,7 +39,7 @@ namespace {
 
 const char * const Program_name = "GNU ddrescuelog";
 const char * const program_name = "ddrescuelog";
-const char * invocation_name = 0;
+const char * invocation_name = program_name;		// default value
 
 enum Mode { m_none, m_and, m_annotate, m_change, m_compare, m_complete,
             m_create, m_delete, m_done_st, m_invert, m_list, m_or,
@@ -54,6 +53,9 @@ void show_help( const int hardbs )
                "rescue status, and can delete a mapfile if the rescue is done. Ddrescuelog\n"
                "operations can be restricted to one or several parts of the mapfile if the\n"
                "domain setting options are used.\n"
+               "\nUse '-' as mapfile to read the mapfile from standard input\n"
+               "(also in the options taking a mapfile argument) or to write the mapfile\n"
+               "created by '--create-mapfile' to standard output.\n"
                "\nNOTE: In versions of ddrescue prior to 1.20 the mapfile was called\n"
                "'logfile'. The format is the same; only the name has changed.\n"
                "\nUsage: %s [options] mapfile\n", invocation_name );
@@ -85,9 +87,7 @@ void show_help( const int hardbs )
                "  -y, --and-mapfile=<file>        AND the finished blocks in file with mapfile\n"
                "  -z, --or-mapfile=<file>         OR the finished blocks in file with mapfile\n"
                "      --shift                     shift all block positions by (opos - ipos)\n"
-               "Use '-' to read a mapfile from standard input or to write the mapfile\n"
-               "created by '--create-mapfile' to standard output.\n"
-               "Numbers may be in decimal, hexadecimal or octal, and may be followed by a\n"
+               "\nNumbers may be in decimal, hexadecimal, or octal, and may be followed by a\n"
                "multiplier: s = sectors, k = 1000, Ki = 1024, M = 10^6, Mi = 2^20, etc...\n"
                "\nExit status: 0 for a normal exit, 1 for environmental problems (file\n"
                "not found, invalid flags, I/O errors, etc), 2 to indicate a corrupt or\n"
@@ -121,7 +121,7 @@ void parse_types( const std::string & arg,
   if( types1.empty() || types2.empty() ) error = true;
   if( error )
     {
-    show_error( "Invalid type for 'change-types' option.", 0, true );
+    show_error( "Invalid type for option 'change-types'.", 0, true );
     std::exit( 1 );
     }
   if( types1.size() > types2.size() )
@@ -136,7 +136,7 @@ void parse_2types( const std::string & arg,
   if( arg.size() != 2 || arg[0] == arg[1] ||
       !Sblock::isstatus( arg[0] ) || !Sblock::isstatus( arg[1] ) )
     {
-    show_error( "Invalid type for 'create-mapfile' option.", 0, true );
+    show_error( "Invalid type for option 'create-mapfile'.", 0, true );
     std::exit( 1 );
     }
   type1 = Sblock::Status( arg[0] );
@@ -149,7 +149,7 @@ void parse_type( const std::string & arg, Sblock::Status & complete_type )
   if( arg.empty() ) return;
   if( arg.size() != 1 || !Sblock::isstatus( arg[0] ) )
     {
-    show_error( "Invalid type for 'complete-mapfile' option.", 0, true );
+    show_error( "Invalid type for option 'complete-mapfile'.", 0, true );
     std::exit( 1 );
     }
   complete_type = Sblock::Status( arg[0] );
@@ -498,7 +498,7 @@ int do_show_status( Domain & domain, const char * const mapname,
   if( verbosity >= 1 ) std::printf( "\n%s", mapname );
   std::printf( "\n   current pos: %9sB,  current status: %s\n",
                format_num( mapfile.current_pos() ),
-               mapfile.status_name( mapfile.current_status() ) );
+               Mapfile::status_name( mapfile.current_status() ) );
   std::printf( "mapfile extent: %9sB,  in %6ld area(s)\n",
                format_num( extent.size() ), true_sblocks );
   if( domain.pos() > 0 || domain.end() < extent.end() || domain.blocks() > 1 )
@@ -548,8 +548,8 @@ int main( const int argc, const char * const argv[] )
   std::string types1, types2;
   Sblock::Status type1 = Sblock::finished, type2 = Sblock::bad_sector;
   Sblock::Status complete_type = Sblock::non_tried;
-  invocation_name = argv[0];
-  command_line = argv[0];
+  if( argc > 0 ) invocation_name = argv[0];
+  command_line = invocation_name;
   for( int i = 1; i < argc; ++i )
     { command_line += ' '; command_line += argv[i]; }
 

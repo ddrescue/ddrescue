@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2019 Antonio Diaz Diaz.
+    Copyright (C) 2004-2020 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -35,6 +35,7 @@ class Block
     { if( size_ < 0 || size_ > LLONG_MAX - pos_ ) size_ = LLONG_MAX - pos_; }
 
 public:
+  Block() {}					// default constructor
   Block( const long long p, const long long s ) : pos_( p ), size_( s )
     { if( p < 0 ) { pos_ = 0; if( s > 0 ) size_ -= std::min( s, -p ); }
       fix_size(); }
@@ -55,9 +56,9 @@ public:
   void size( const long long s ) { size_ = s; fix_size(); }
   void enlarge( long long s )
     { if( s < 0 ) s = LLONG_MAX;
-      if( s > LLONG_MAX - pos_ - size_ ) s = LLONG_MAX - pos_ - size_;
+      if( s > LLONG_MAX - end() ) s = LLONG_MAX - end();
       size_ += s; }
-  void end( long long e )
+  void end( long long e )			// also moves pos
     { if( e < 0 ) e = LLONG_MAX;
       if( size_ <= e ) pos_ = e - size_; else { pos_ = 0; size_ = e; } }
   Block & assign( const long long p, const long long s )
@@ -96,13 +97,14 @@ public:
 class Sblock : public Block
   {
 public:
-  enum Status
+  enum Status		// ordered from less to more processed state
     { non_tried = '?', non_trimmed = '*', non_scraped = '/',
       bad_sector = '-', finished = '+' };
 private:
   Status status_;
 
 public:
+  Sblock() {}					// default constructor
   Sblock( const Block & b, const Status st )
     : Block( b ), status_( st ) {}
   Sblock( const long long p, const long long s, const Status st )
@@ -122,6 +124,17 @@ public:
     { return ( st == non_tried || st == non_trimmed || st == non_scraped ||
                st == bad_sector || st == finished ); }
   static bool is_good_status( const Status st ) { return st != bad_sector; }
+  static int processed_state( const Status st )
+    {
+    switch( st )
+      {
+      case non_tried:   return 0;
+      case non_trimmed: return 1;
+      case non_scraped: return 2;
+      case bad_sector:  return 3;
+      default:          return 4;
+      }
+    }
   };
 
 
@@ -222,15 +235,16 @@ public:
       current_pass_( 1 ), index_( 0 ), read_only_( false ) {}
 
   void compact_sblock_vector();
+  void join_subsectors( const int hardbs );
   void extend_sblock_vector( const long long insize );
   void shift_blocks( const long long offset );
   bool truncate_vector( const long long end, const bool force = false );
   void set_to_status( const Sblock::Status st )
     { sblock_vector.assign( 1, Sblock( 0, -1, st ) ); }
   bool read_mapfile( const int default_sblock_status = 0, const bool ro = true );
-  int write_mapfile( FILE * f = 0, const bool timestamp = false,
-                     const bool mf_sync = false,
-                     const Domain * const annotate_domainp = 0 ) const;
+  bool write_mapfile( FILE * f = 0, const bool timestamp = false,
+                      const bool mf_sync = false,
+                      const Domain * const annotate_domainp = 0 ) const;
 
   bool blank() const;
   long long current_pos() const { return current_pos_; }
@@ -284,7 +298,6 @@ public:
 
 
 // Defined in main_common.cc
-//
 extern int verbosity;
 void show_error( const char * const msg,
                  const int errcode = 0, const bool help = false );
@@ -300,3 +313,6 @@ const char * format_num( long long num, long long limit = 999999,
                          const int set_prefix = 0 );
 const char * format_percentage( long long num, long long den,
                                 const int iwidth = 3, int prec = -2 );
+
+// defined in main.cc
+const char * format_num3( long long num );
