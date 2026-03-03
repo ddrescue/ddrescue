@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2013-2017 Antonio Diaz Diaz.
+    Copyright (C) 2013-2018 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -180,7 +180,7 @@ bool Read_logger::print_line( const long long ipos, const long long size,
 bool Read_logger::print_msg( const long time, const char * const msg )
   {
   if( f && !error &&
-      std::fprintf( f, "%s# %s  %s\n", prev_is_msg ? "" : "\n\n",
+      std::fprintf( f, "%s# %s  %s\n", prev_is_msg ? "" : "\n",
                     format_time_dhms( time ), msg ) < 0 )
     error = true;
   prev_is_msg = true;

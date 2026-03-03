@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2017 Antonio Diaz Diaz.
+    Copyright (C) 2004-2018 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -95,7 +95,7 @@ bool Rescuebook::extend_outfile_size()
     if( min_size > size )
       {
       const uint8_t zero = 0;
-      if( writeblock( odes_, &zero, 1, min_size - 1 ) != 1 ) return false;
+      if( writeblockp( odes_, &zero, 1, min_size - 1 ) != 1 ) return false;
       fsync( odes_ );
       }
     }
@@ -119,13 +119,13 @@ int Rescuebook::copy_block( const Block & b, int & copied_size, int & error_size
       const int size = pre + b.size() + post;
       if( size > iobuf_size() )
         internal_error( "(size > iobuf_size) copying a Block." );
-      copied_size = readblock( ides_, iobuf(), size, b.pos() - pre );
+      copied_size = readblockp( ides_, iobuf(), size, b.pos() - pre );
       copied_size -= std::min( pre, copied_size );
       if( copied_size > b.size() ) copied_size = b.size();
       if( pre > 0 && copied_size > 0 )
         std::memmove( iobuf(), iobuf() + pre, copied_size );
       }
-    else copied_size = readblock( ides_, iobuf(), b.size(), b.pos() );
+    else copied_size = readblockp( ides_, iobuf(), b.size(), b.pos() );
     error_size = errno ? b.size() - copied_size : 0;
     if( errno == EINVAL )
       { final_msg( "Unaligned read error. Is sector size correct?" ); return 1; }
@@ -141,7 +141,7 @@ int Rescuebook::copy_block( const Block & b, int & copied_size, int & error_size
       const long long end = pos + copied_size;
       if( end > sparse_size ) sparse_size = end;
       }
-    else if( writeblock( odes_, iobuf(), copied_size, pos ) != copied_size ||
+    else if( writeblockp( odes_, iobuf(), copied_size, pos ) != copied_size ||
              ( synchronous_ && fsync( odes_ ) != 0 && errno != EINVAL ) )
       { final_msg( "Write error", errno ); return 1; }
     }
@@ -157,7 +157,7 @@ int Rescuebook::copy_block( const Block & b, int & copied_size, int & error_size
       {
       if( voe_ipos >= 0 )
         {
-        const int size = readblock( ides_, iobuf_aux(), hardbs(), voe_ipos );
+        const int size = readblockp( ides_, iobuf_aux(), hardbs(), voe_ipos );
         if( size != hardbs() )
           { final_msg( "Input file no longer returns data", errno ); e_code |= 8; }
         else if( std::memcmp( voe_buf, iobuf_aux(), hardbs() ) != 0 )
@@ -441,20 +441,22 @@ int Rescuebook::trim_errors()
 
   for( long i = 0; i < sblocks(); )
     {
-    const Sblock sb = sblock( reverse ? sblocks() - i - 1 : i );
+    const long idx = reverse ? sblocks() - 1 - i : i;
+    const Sblock sb = sblock( idx );
     if( !domain().includes( sb ) )
       { if( ( !reverse && domain() < sb ) || ( reverse && domain() > sb ) )
           break;
         ++i; continue; }
     if( sb.status() != Sblock::non_trimmed ) { ++i; continue; }
+    const bool lbad = ( idx > 0 &&
+                        sblock( idx - 1 ).status() == Sblock::bad_sector );
+    const bool rbad = ( idx + 1 < sblocks() &&
+                        sblock( idx + 1 ).status() == Sblock::bad_sector );
+    if( lbad && rbad )		// leave block for the scraping phase
+      { change_sblock_status( idx, Sblock::non_scraped ); ++i; continue; }
+    bool error_found = lbad;
     long long pos = sb.pos();
     long long end = sb.end();
-    const bool lbad = ( i > 0 && sblock( i - 1 ).status() == Sblock::bad_sector );
-    const bool rbad = ( i + 1 < sblocks() &&
-                        sblock( i + 1 ).status() == Sblock::bad_sector );
-    if( lbad && rbad )		// leave block for the scraping phase
-      { change_sblock_status( i, Sblock::non_scraped ); ++i; continue; }
-    bool error_found = lbad;
     while( pos < end && !error_found )		// trim leading edge
       {
       Block b( pos, std::min( (long long)hardbs(), end - pos ) );
@@ -470,7 +472,7 @@ int Rescuebook::trim_errors()
       if( !update_mapfile( odes_ ) ) return -2;
       }
     error_found = rbad;
-    while( end > pos && !error_found )		// trim trailing edge
+    while( pos < end && !error_found )		// trim trailing edge
       {
       const int size = std::min( (long long)hardbs(), end - pos );
       Block b( end - size, size );
@@ -485,7 +487,7 @@ int Rescuebook::trim_errors()
         { error_found = true; if( pause_on_error > 0 ) do_pause_on_error(); }
       if( !update_mapfile( odes_ ) ) return -2;
       }
-    if( end > pos )
+    if( pos < end )
       {
       const long index = find_index( end - 1 );
       if( index >= 0 && domain().includes( sblock( index ) ) &&
@@ -508,7 +510,7 @@ int Rescuebook::scrape_errors()
 
   for( long i = 0; i < sblocks(); )
     {
-    const Sblock sb = sblock( reverse ? sblocks() - i - 1 : i );
+    const Sblock sb = sblock( reverse ? sblocks() - 1 - i : i );
     if( !domain().includes( sb ) )
       { if( ( !reverse && domain() < sb ) || ( reverse && domain() > sb ) )
           break;
@@ -647,7 +649,7 @@ bool Rescuebook::update_rates( const bool force )
     rates_updated = true;
     if( verbosity >= 0 )
       {
-      std::fputs( "\n\n\n\n\n", stdout );
+      std::fputs( "\n\n\n\n\n\n", stdout );
       if( preview_lines > 0 )
         for( int i = -2; i < preview_lines; ++i ) std::fputc( '\n', stdout );
       }
@@ -939,7 +941,7 @@ int Rescuebook::do_rescue( const int ides, const int odes )
     { if( final_errno() ) show_error( final_msg().c_str(), final_errno() );
       else { std::fputs( final_msg().c_str(), stdout ); std::fputc( '\n', stdout ); } }
   if( close( odes_ ) != 0 )
-    { show_error( "Can't close outfile", errno );
+    { show_error( "Error closing outfile", errno );
       if( retval == 0 ) retval = 1; }
   event_logger.print_eor( t1 - t0, percent_rescued(), current_pos(),
                           status_name( current_status() ) );

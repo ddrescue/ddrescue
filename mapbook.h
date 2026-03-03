@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2017 Antonio Diaz Diaz.
+    Copyright (C) 2004-2018 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -166,10 +166,11 @@ const char * format_time( const long t, const bool low_prec = false );
 
 // Defined in io.cc
 //
-int readblock( const int fd, uint8_t * const buf, const int size,
-               const long long pos );
-int writeblock( const int fd, const uint8_t * const buf, const int size,
+int readblock( const int fd, uint8_t * const buf, const int size );
+int readblockp( const int fd, uint8_t * const buf, const int size,
                 const long long pos );
+int writeblockp( const int fd, const uint8_t * const buf, const int size,
+                 const long long pos );
 bool interrupted();
 void set_signals();
 int signaled_exit();

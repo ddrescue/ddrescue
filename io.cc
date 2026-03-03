@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2017 Antonio Diaz Diaz.
+    Copyright (C) 2004-2018 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@
 #include <cerrno>
 #include <climits>
 #include <csignal>
+#include <cstdio>
 #include <string>
 #include <vector>
 #include <stdint.h>
@@ -52,8 +53,27 @@ int set_signal( const int signum, void (*handler)( int ) )
 // Returns the number of bytes really read.
 // If (returned value < size) and (errno == 0), means EOF was reached.
 //
-int readblock( const int fd, uint8_t * const buf, const int size,
-               const long long pos )
+int readblock( const int fd, uint8_t * const buf, const int size )
+  {
+  int sz = 0;
+  errno = 0;
+  while( sz < size )
+    {
+    const int n = read( fd, buf + sz, size - sz );
+    if( n > 0 ) sz += n;
+    else if( n == 0 ) break;				// EOF
+    else if( errno != EINTR ) break;
+    errno = 0;
+    }
+  return sz;
+  }
+
+
+// Returns the number of bytes really read.
+// If (returned value < size) and (errno == 0), means EOF was reached.
+//
+int readblockp( const int fd, uint8_t * const buf, const int size,
+                const long long pos )
   {
   int sz = 0;
   errno = 0;
@@ -73,8 +93,8 @@ int readblock( const int fd, uint8_t * const buf, const int size,
 // Returns the number of bytes really written.
 // If (returned value < size), it is always an error.
 //
-int writeblock( const int fd, const uint8_t * const buf, const int size,
-                const long long pos )
+int writeblockp( const int fd, const uint8_t * const buf, const int size,
+                 const long long pos )
   {
   int sz = 0;
   errno = 0;

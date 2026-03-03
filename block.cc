@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2017 Antonio Diaz Diaz.
+    Copyright (C) 2004-2018 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -72,8 +72,8 @@ bool Block::join( const Block & b )
   }
 
 
-// shift the border of two consecutive Blocks
-void Block::shift( Block & b, const long long pos )
+// shift the boundary of two consecutive Blocks
+void Block::shift_boundary( Block & b, const long long pos )
   {
   if( end() != b.pos_ || pos <= pos_ || pos >= b.end() )
     internal_error( "bad argument shifting the border of two Blocks." );
