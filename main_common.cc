@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2024 Antonio Diaz Diaz.
+   Copyright (C) 2004-2025 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@ int verbosity = 0;
 
 namespace {
 
-const char * const program_year = "2024";
+const char * const program_year = "2025";
 std::string command_line;
 const char * const inval_t_msg = "Invalid type in argument of";
 
@@ -56,7 +56,7 @@ long long getnum( const char * const arg, const char * const option_name,
     { show_option_error( arg, "Bad or missing numerical argument in",
                          option_name ); std::exit( 1 ); }
 
-  if( !errno && tail[0] )
+  if( !errno && *tail )
     {
     char * const p = tail++;
     int factor = 1000;				// default factor
@@ -73,17 +73,17 @@ long long getnum( const char * const arg, const char * const option_name,
       case 'T': exponent = 4; break;
       case 'G': exponent = 3; break;
       case 'M': exponent = 2; break;
-      case 'K': if( tail[0] == 'i' ) { ++tail; factor = 1024; exponent = 1; } break;
-      case 'k': if( tail[0] != 'i' ) exponent = 1; break;
+      case 'K': if( *tail == 'i' ) { ++tail; factor = 1024; exponent = 1; } break;
+      case 'k': if( *tail != 'i' ) exponent = 1; break;
       case 'B':
       case 's': usuf = *p; exponent = 0; break;
       default: if( tailp ) { tail = p; exponent = 0; }
       }
-    if( exponent > 1 && tail[0] == 'i' ) { ++tail; factor = 1024; }
-    if( exponent > 0 && usuf == 0 && ( tail[0] == 'B' || tail[0] == 's' ) )
-      { usuf = tail[0]; ++tail; }
+    if( exponent > 1 && *tail == 'i' ) { ++tail; factor = 1024; }
+    if( exponent > 0 && usuf == 0 && ( *tail == 'B' || *tail == 's' ) )
+      { usuf = *tail; ++tail; }
     if( exponent < 0 || ( usuf == 's' && hardbs <= 0 ) ||
-        ( !tailp && tail[0] != 0 ) )
+        ( !tailp && *tail != 0 ) )
       { show_option_error( arg, "Bad multiplier in numerical argument of",
                            option_name ); std::exit( 1 ); }
     for( int i = 0; i < exponent; ++i )
@@ -172,7 +172,7 @@ const char * format_timestamp( const long long t = 0 )
 void show_error( const char * const msg, const int errcode, const bool help )
   {
   if( verbosity < 0 ) return;
-  if( msg && msg[0] )
+  if( msg && *msg )
     std::fprintf( stderr, "%s: %s%s%s\n", program_name, msg,
                   ( errcode > 0 ) ? ": " : "",
                   ( errcode > 0 ) ? std::strerror( errcode ) : "" );
@@ -241,7 +241,7 @@ bool write_timestamp( FILE * const f )
   {
   const char * const timestamp = format_timestamp();
 
-  return ( !timestamp || !timestamp[0] ||
+  return ( !timestamp || !*timestamp ||
            std::fprintf( f, "# Current time: %s\n", timestamp ) >= 0 );
   }
 
@@ -281,7 +281,7 @@ const char * format_num( long long num, int limit, const int set_prefix )
 
 
 // separate numbers of 5 or more digits in groups of 3 digits using '_'
-const char * format_num3( long long num )
+const char * format_num3( long long num, const bool space )
   {
   enum { buffers = 8, bufsize = 4 * sizeof num, n = 10 };
   const char * const si_prefix = "kMGTPEZYRQ";
@@ -291,9 +291,9 @@ const char * format_num3( long long num )
 
   char * const buf = buffer[current++]; current %= buffers;
   char * p = buf + bufsize - 1;		// fill the buffer backwards
-  *p = 0;	// terminator
+  *p = 0;				// terminator
   const bool negative = num < 0;
-  if( num > 1024 || num < -1024 )
+  if( num > 9999 || num < -9999 )
     {
     char prefix = 0;			// try binary first, then si
     for( int i = 0; i < n && num != 0 && num % 1024 == 0; ++i )
@@ -305,7 +305,7 @@ const char * format_num3( long long num )
     if( prefix ) *(--p) = prefix;
     }
   const bool split = num >= 10000 || num <= -10000;
-
+  if( space ) *(--p) = ' ';
   for( int i = 0; ; )
     {
     const long long onum = num; num /= 10;

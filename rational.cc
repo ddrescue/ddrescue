@@ -1,5 +1,5 @@
 /* Rational - Rational number class with overflow detection
-   Copyright (C) 2005-2024 Antonio Diaz Diaz.
+   Copyright (C) 2005-2025 Antonio Diaz Diaz.
 
    This library is free software. Redistribution and use in source and
    binary forms, with or without modification, are permitted provided
@@ -69,16 +69,12 @@ void Rational::normalize( long long n, long long d )
   {
   if( d == 0 ) { num = overflow_value( n ); den = 0; return; }  // set error
   if( n == 0 ) { num = 0; den = 1; return; }
-  if( d != 1 )
-    {
-    const long long tmp = gcd( n, d );
-    n /= tmp; d /= tmp;
-    }
+  if( d < 0 ) { n = -n; d = -d; }			// just in case
+  if( d != 1 ) { const long long tmp = gcd( n, d ); n /= tmp; d /= tmp; }
 
-  if( n <= INT_MAX && n >= -INT_MAX && d <= INT_MAX && d >= -INT_MAX )
-    { if( d >= 0 ) { num = n; den = d; } else { num = -n; den = -d; } }
-  else
-    { num = overflow_value( n, d < 0 ); den = 0; }
+  if( n <= INT_MAX && n >= -INT_MAX && d <= INT_MAX && d > 0 )
+    { num = n; den = d; return; }	// n / d is in range within precision
+  num = overflow_value( n, d < 0 ); den = 0;
   }
 
 
@@ -166,7 +162,7 @@ int Rational::parse( const char * const s )
   else if( s[c] == '-' ) { ++c; minus = true; }
   if( !std::isdigit( s[c] ) && s[c] != '.' ) return 0;
 
-  while( std::isdigit( s[c] ) )
+  while( std::isdigit( s[c] ) )		// integer part or numerator
     {
     if( ( LLONG_MAX - (s[c] - '0') ) / 10 < n ) return 0;
     n = (n * 10) + (s[c] - '0'); ++c;
@@ -257,7 +253,7 @@ std::string Rational::to_decimal( const unsigned iwidth, int prec,
 
 /* Return a string representing the value 'num/den' in fractional form.
    'width' is the minimum width to be produced, prefixed with spaces if
-   needed.
+   needed. If den == 1, print num alone.
 */
 std::string Rational::to_fraction( const unsigned width ) const
   {
@@ -266,8 +262,8 @@ std::string Rational::to_fraction( const unsigned width ) const
   std::string s;
   int n = std::abs( num ), d = den;
 
-  do { s += ( d % 10 ) + '0'; d /= 10; } while( d > 0 );
-  s += '/';
+  if( d > 1 )
+    { do { s += ( d % 10 ) + '0'; d /= 10; } while( d > 0 ); s += '/'; }
   do { s += ( n % 10 ) + '0'; n /= 10; } while( n > 0 );
   if( num < 0 ) s += '-';
   if( width > s.size() ) s.append( width - s.size(), ' ' );

@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2024 Antonio Diaz Diaz.
+   Copyright (C) 2004-2025 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -326,7 +326,7 @@ bool write_timestamp( FILE * const f );
 bool write_final_timestamp( FILE * const f );
 const char * format_num( long long num, int limit = 999999,
                          const int set_prefix = 0 );
-const char * format_num3( long long num );
+const char * format_num3( long long num, const bool space = false );
 const char * format_percentage( long long num, long long den,
                                 const int iwidth = 3, int prec = -2,
                                 const bool rounding = true );

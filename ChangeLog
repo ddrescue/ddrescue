@@ -1,3 +1,21 @@
+2025-01-05  Antonio Diaz Diaz  <antonio@gnu.org>
+
+	* Version 1.29 released.
+	* New option '--continue-on-errno'.
+	* main.cc: New function 'show_final_msg' showing the value of errno.
+	  (about_to_copy): Print rescue options before asking user.
+	* loggers.cc (Read_logger): Record errno if different from EIO.
+	  (The four changes above suggested by Christian Franke).
+	* rescuebook.cc: Extend '-O, --reopen-on-error' to all phases.
+	* ddrescuelog.cc (test_offset): Use llabs instead of std::abs.
+	  (Reported by Jordi Sanfeliu).
+	* ddrescue.texi: New chapter 'Syntax of command-line arguments'.
+	  Add two examples of combined use with lziprecover.
+	  Document that '--continue-on-errno' may need '--reopen-on-error'.
+	  Document that option -b of ddrescuelog is position dependent.
+	  (Reported by Winston B. E.).
+	* check.sh: Use 'cp' instead of 'cat'.
+
 2024-01-22  Antonio Diaz Diaz  <antonio@gnu.org>
 
 	* Version 1.28 released.
@@ -48,7 +66,7 @@
 	* command_mode.cc, io.cc, loggers.cc: Missing '#include <algorithm>'.
 	  (Reported by Richard Burkert).
 	* ddrescue.texi: Improve description of algorithm.
-	* check.sh: A POSIX shell is required to run the tests.
+	* check.sh: Require a POSIX shell.
 
 2020-02-21  Antonio Diaz Diaz  <antonio@gnu.org>
 
@@ -274,7 +292,7 @@
 	* New option '-a, --min-read-rate'.
 	* New option '-I, --verify-input-size'.
 	* New option '-x, --extend-outfile'.
-	* main.cc: Check that infile, outfile and logfile are all different.
+	* main.cc: Check that infile, outfile, and logfile are all different.
 	* Non-tried blocks are now read aligned to cluster-size sectors.
 	* rescuebook.cc: Improve skip algorithm for the split pass.
 	* main.cc: Remove spurious warning about '-D' ignored in fill mode.
@@ -301,12 +319,12 @@
 	* New option '-f, --force'.
 	* New option '-p, --preallocate'.
 	* main.cc (write_logfile_header): Write command line to logfile.
-	* ddrescue.texinfo: Add info about logfile and recoverable formats.
-	* ddrescue.texinfo: Add a couple more warnings to the tutorial.
-	* testsuite: Rename 'test1' to 'test.txt'
 	* Revert to use 'long' instead of 'time_t' for time variables.
 	  Ddrescue only needs counting seconds, and 'time_t' causes warnings
 	  on some systems.
+	* ddrescue.texinfo: Add info about logfile and recoverable formats.
+	  Add a couple more warnings to the tutorial.
+	* testsuite: Rename 'test1' to 'test.txt'
 
 2010-04-06  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
@@ -328,8 +346,8 @@
 	* ddrescue.cc (Rescuebook::show_status): Show the time elapsed
 	  since last successful read.
 	* ddrescue.cc (set_signals): Ignore SIGUSR1 and SIGUSR2.
-	* ddrescue.texinfo: Improve description of '-d', '-D', and '-S'.
-	* ddrescue.texinfo: Improve description of algorithm.
+	* ddrescue.texinfo: Improve descriptions of '-d', '-D', and '-S'.
+	  Improve description of algorithm.
 	* check.sh: Check that files are opened in binary mode.
 	* Add logfile usage warning to the output of 'ddrescue --help'.
 
@@ -378,15 +396,15 @@
 	* Add support for sparse output files.
 	* Blocks longer than hardbs are now split at sector boundaries.
 	* New option '-F, --fill'.
-	* ddrescue.texinfo: New chapter 'Fill Mode'.
 	* Add status line to logfile.
 	* An interrupted retry pass is now resumed instead of reinitiated.
 	* Perfect resumability if interrupted during trimming or splitting.
 	* ddrescue.cc (set_signals): Handle also SIGHUP and SIGTERM.
 	* Option '--quiet' now also quiets error messages.
 	* Print a more informative error message when reading an old logfile.
-	* ddrescue.texinfo: Add note about old logfiles.
 	* Add some consistency checks.
+	* ddrescue.texinfo: New chapter 'Fill Mode'.
+	  Add note about old logfiles.
 
 2007-06-29  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
@@ -419,8 +437,8 @@
 
 	* Version 1.1 released.
 	* Align 'iobuf' to the sector size for use with raw devices.
-	* ddrescue.texinfo: Add a small tutorial.
 	* Add two missing #includes.
+	* ddrescue.texinfo: Add a small tutorial.
 
 2005-06-07  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
@@ -490,7 +508,7 @@
 	* Version 0.1 released.
 
 
-Copyright (C) 2004-2024 Antonio Diaz Diaz.
+Copyright (C) 2004-2025 Antonio Diaz Diaz.
 
 This file is a collection of facts, and thus it is not copyrightable, but just
 in case, you have unlimited permission to copy, distribute, and modify it.

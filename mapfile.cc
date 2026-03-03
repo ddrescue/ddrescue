@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2024 Antonio Diaz Diaz.
+   Copyright (C) 2004-2025 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -419,7 +419,7 @@ bool Mapfile::blank() const
 
 const char * Mapfile::pname( const bool in ) const
   {
-  if( !filename_ || !filename_[0] || std::strcmp( filename_, "-" ) == 0 )
+  if( !filename_ || !*filename_ || std::strcmp( filename_, "-" ) == 0 )
     return in ? "(stdin)" : "(stdout)";
   return filename_;
   }
@@ -498,8 +498,8 @@ long Mapfile::find_index( const long long pos ) const
 
 /* Find chunk from b.pos forwards of size <= b.size and status st.
    if unfinished is true, find also any chunk not marked as finished.
-   If not found, or if after_finished is true and none of the blocks
-   found follows a finished block, put b.size to 0.
+   If not found, or if after_finished is true and none of the blocks found
+   follows a finished block, put b.size to 0.
    If at least one block of status st is found, return true.
 */
 bool Mapfile::find_chunk( Block & b, const Sblock::Status st,
@@ -537,8 +537,8 @@ bool Mapfile::find_chunk( Block & b, const Sblock::Status st,
 
 
 /* Find chunk from b.end backwards of size <= b.size and status st.
-   If not found, or if before_finished is true and none of the blocks
-   found precedes a finished block, put b.size to 0.
+   If not found, or if before_finished is true and none of the blocks found
+   precedes a finished block, put b.size to 0.
    If at least one block of status st is found, return true.
 */
 bool Mapfile::rfind_chunk( Block & b, const Sblock::Status st,

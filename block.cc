@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2024 Antonio Diaz Diaz.
+   Copyright (C) 2004-2025 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -90,7 +90,7 @@ Domain::Domain( const long long p, const long long s,
   {
   reset_cached_in_size();
   const Block b( p, s );
-  if( !mapname || !mapname[0] ) { block_vector.push_back( b ); return; }
+  if( !mapname || !*mapname ) { block_vector.push_back( b ); return; }
   Mapfile mapfile( mapname );
   if( !mapfile.read_mapfile( loose ? '?' : 0 ) )
     { show_file_error( mapname, "Mapfile does not exist or is not readable." );

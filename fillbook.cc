@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2024 Antonio Diaz Diaz.
+   Copyright (C) 2004-2025 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -139,7 +139,7 @@ void Fillbook::show_status( const long long ipos, const char * const msg,
                  format_num( a_rate, 99999 ) );
     std::printf( "current pos: %9sB,  run time: %11s\n",
                  format_num( last_ipos + offset() ), format_time( t1 - t0 ) );
-    if( msg && msg[0] )
+    if( msg && *msg )
       {
       const int len = std::strlen( msg ); std::printf( "\r%s", msg );
       for( int i = len; i < oldlen; ++i ) std::fputc( ' ', stdout );

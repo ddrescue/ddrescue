@@ -1,5 +1,5 @@
 /* GNU ddrescuelog - Tool for ddrescue mapfiles
-   Copyright (C) 2011-2024 Antonio Diaz Diaz.
+   Copyright (C) 2011-2025 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -145,7 +145,7 @@ void parse_types( const std::string & sarg, const char * const option_name,
     { show_option_error( sarg.c_str(), inval_t_msg, option_name );
       std::exit( 1 ); }
   if( types1.size() > types2.size() )
-    types2.append( types1.size() - types2.size(), types2[types2.size()-1] );
+    types2.append( types1.size() - types2.size(), types2.end()[-1] );
   }
 
 
@@ -175,7 +175,7 @@ void parse_type( const std::string & sarg, const char * const option_name,
 
 void test_offset( const long long offset, const int hardbs )
   {
-  if( std::abs( offset ) % hardbs )
+  if( llabs( offset ) % hardbs )
     { show_error( "Offset between '-i' and '-o' must be 0 or a multiple of sector size." );
       std::exit( 1 ); }
   }
@@ -745,37 +745,37 @@ int main( const int argc, const char * const argv[] )
   enum Optcode { opt_shi = 256 };
   const Arg_parser::Option options[] =
     {
-    { 'a', "change-types",        Arg_parser::yes },
-    { 'A', "annotate-mapfile",    Arg_parser::no  },
-    { 'b', "block-size",          Arg_parser::yes },
-    { 'b', "sector-size",         Arg_parser::yes },
-    { 'B', "binary-prefixes",     Arg_parser::no  },
-    { 'c', "create-mapfile",      Arg_parser::maybe },
-    { 'C', "complete-mapfile",    Arg_parser::maybe },
-    { 'd', "delete-if-done",      Arg_parser::no  },
-    { 'D', "done-status",         Arg_parser::no  },
-    { 'f', "force",               Arg_parser::no  },
-    { 'F', "format",              Arg_parser::yes },
-    { 'h', "help",                Arg_parser::no  },
-    { 'i', "input-position",      Arg_parser::yes },
-    { 'l', "list-blocks",         Arg_parser::yes },
-    { 'L', "loose-domain",        Arg_parser::no  },
-    { 'm', "domain-mapfile",      Arg_parser::yes },
-    { 'n', "invert-mapfile",      Arg_parser::no  },
-    { 'o', "output-position",     Arg_parser::yes },
-    { 'p', "compare-mapfile",     Arg_parser::yes },
-    { 'P', "compare-as-domain",   Arg_parser::yes },
-    { 'q', "quiet",               Arg_parser::no  },
-    { 's', "size",                Arg_parser::yes },
-    { 's', "max-size",            Arg_parser::yes },
-    { 't', "show-status",         Arg_parser::no  },
-    { 'v', "verbose",             Arg_parser::no  },
-    { 'V', "version",             Arg_parser::no  },
-    { 'x', "xor-mapfile",         Arg_parser::yes },
-    { 'y', "and-mapfile",         Arg_parser::yes },
-    { 'z', "or-mapfile",          Arg_parser::yes },
-    { opt_shi, "shift",           Arg_parser::no  },
-    {  0 , 0,                     Arg_parser::no  } };
+    { 'a', "change-types",      Arg_parser::yes },
+    { 'A', "annotate-mapfile",  Arg_parser::no  },
+    { 'b', "block-size",        Arg_parser::yes },
+    { 'b', "sector-size",       Arg_parser::yes },
+    { 'B', "binary-prefixes",   Arg_parser::no  },
+    { 'c', "create-mapfile",    Arg_parser::maybe },
+    { 'C', "complete-mapfile",  Arg_parser::maybe },
+    { 'd', "delete-if-done",    Arg_parser::no  },
+    { 'D', "done-status",       Arg_parser::no  },
+    { 'f', "force",             Arg_parser::no  },
+    { 'F', "format",            Arg_parser::yes },
+    { 'h', "help",              Arg_parser::no  },
+    { 'i', "input-position",    Arg_parser::yes },
+    { 'l', "list-blocks",       Arg_parser::yes },
+    { 'L', "loose-domain",      Arg_parser::no  },
+    { 'm', "domain-mapfile",    Arg_parser::yes },
+    { 'n', "invert-mapfile",    Arg_parser::no  },
+    { 'o', "output-position",   Arg_parser::yes },
+    { 'p', "compare-mapfile",   Arg_parser::yes },
+    { 'P', "compare-as-domain", Arg_parser::yes },
+    { 'q', "quiet",             Arg_parser::no  },
+    { 's', "size",              Arg_parser::yes },
+    { 's', "max-size",          Arg_parser::yes },
+    { 't', "show-status",       Arg_parser::no  },
+    { 'v', "verbose",           Arg_parser::no  },
+    { 'V', "version",           Arg_parser::no  },
+    { 'x', "xor-mapfile",       Arg_parser::yes },
+    { 'y', "and-mapfile",       Arg_parser::yes },
+    { 'z', "or-mapfile",        Arg_parser::yes },
+    { opt_shi, "shift",         Arg_parser::no  },
+    { 0, 0,                     Arg_parser::no  } };
 
   const Arg_parser parser( argc, argv, options );
   if( parser.error().size() )				// bad option
