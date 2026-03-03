@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010
+    Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
     Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@
 #include <cstdio>
 #include <string>
 #include <vector>
+#include <stdint.h>
 
 #include "block.h"
 #include "ddrescue.h"
