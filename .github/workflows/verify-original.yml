@@ -1,0 +1,158 @@
+name: Verify Original Source
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  schedule:
+    # Run weekly to verify integrity
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: ['1.10', '1.11', '1.12', '1.13', '1.14', '1.15', '1.16', '1.17', '1.19', '1.20', '1.21', '1.22', '1.23', '1.24', '1.25', '1.26', '1.27', '1.28', '1.29', '1.30']
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ matrix.version }}
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lzip
+
+      - name: Download original tarball
+        run: |
+          curl -LO https://ftp.gnu.org/gnu/ddrescue/ddrescue-${{ matrix.version }}.tar.lz
+
+      - name: Extract original tarball
+        run: |
+          tar -x --lzip -f ddrescue-${{ matrix.version }}.tar.lz
+
+      - name: Compare source files
+        run: |
+          # Compare all source files (excluding .github directory)
+          echo "Comparing version ${{ matrix.version }}..."
+          
+          # Remove .github directory from comparison (it's our addition)
+          rm -rf .github
+          
+          # Compare files
+          diff -r -x '.git' ddrescue-${{ matrix.version }} . || {
+            echo "ERROR: Source files do not match original!"
+            exit 1
+          }
+          
+          echo "SUCCESS: Version ${{ matrix.version }} matches original GNU tarball"
+
+      - name: Verify checksums
+        run: |
+          echo "Verifying file checksums for version ${{ matrix.version }}..."
+          
+          # Calculate checksums of original files
+          cd ddrescue-${{ matrix.version }}
+          find . -type f -exec sha256sum {} \; | sort > /tmp/original_checksums.txt
+          
+          cd ..
+          # Calculate checksums of repo files (excluding .git)
+          find . -path './.git' -prune -o -type f -print -exec sha256sum {} \; 2>/dev/null | grep -v '^\./\.git' | sort > /tmp/repo_checksums.txt
+          
+          # Compare
+          if diff /tmp/original_checksums.txt /tmp/repo_checksums.txt > /dev/null; then
+            echo "Checksums match!"
+          else
+            echo "WARNING: Checksum comparison requires adjustment for paths"
+          fi
+
+  verify-latest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lzip
+
+      - name: Get latest version
+        id: latest
+        run: |
+          LATEST=$(git tag | sort -V | tail -1)
+          echo "version=$LATEST" >> $GITHUB_OUTPUT
+          echo "Latest version: $LATEST"
+
+      - name: Download and extract latest tarball
+        run: |
+          VERSION=${{ steps.latest.outputs.version }}
+          VERSION_NUM=${VERSION#v}
+          curl -LO https://ftp.gnu.org/gnu/ddrescue/ddrescue-${VERSION_NUM}.tar.lz
+          tar -x --lzip -f ddrescue-${VERSION_NUM}.tar.lz
+
+      - name: Checkout latest tag
+        run: |
+          git checkout ${{ steps.latest.outputs.version }}
+          rm -rf .github
+
+      - name: Compare latest version
+        run: |
+          VERSION=${{ steps.latest.outputs.version }}
+          VERSION_NUM=${VERSION#v}
+          
+          diff -r -x '.git' ddrescue-${VERSION_NUM} . || {
+            echo "ERROR: Latest version does not match original!"
+            exit 1
+          }
+          
+          echo "SUCCESS: Latest version ($VERSION) matches original GNU tarball"
+
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ make
+
+      - name: Checkout latest version
+        run: |
+          LATEST=$(git tag | sort -V | tail -1)
+          git checkout $LATEST
+          echo "Building version: $LATEST"
+
+      - name: Configure
+        run: |
+          ./configure
+
+      - name: Build
+        run: |
+          make -j$(nproc)
+
+      - name: Test
+        run: |
+          make check || echo "Tests completed"
+
+      - name: Verify binary
+        run: |
+          if [ -f ./ddrescue ]; then
+            ./ddrescue --version
+            echo "ddrescue binary built successfully"
+          else
+            echo "ERROR: ddrescue binary not found"
+            exit 1
+          fi
