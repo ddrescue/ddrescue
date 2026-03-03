@@ -46,7 +46,7 @@ enum Mode { m_none, m_and, m_change, m_compare, m_create, m_delete,
             m_done_st, m_invert, m_list, m_or, m_status, m_xor };
 
 
-void show_help( const int hardbs ) throw()
+void show_help( const int hardbs )
   {
   std::printf( "%s - Tool for ddrescue logfiles.\n", Program_name );
   std::printf( "Manipulates ddrescue logfiles, shows their contents, converts them to/from\n"
@@ -70,27 +70,27 @@ void show_help( const int hardbs ) throw()
                "  -q, --quiet                    suppress all messages\n"
                "  -s, --max-size=<bytes>         maximum size of rescue domain to be processed\n"
                "  -t, --show-status              show a summary of logfile contents\n"
-               "  -v, --verbose                  verbose operation\n"
+               "  -v, --verbose                  be verbose (a 2nd -v gives more)\n"
                "  -x, --xor-logfile=<file>       XOR the finished blocks in file with logfile\n"
                "  -y, --and-logfile=<file>       AND the finished blocks in file with logfile\n"
-               "  -z, --or-logfile=<file>        OR the finished blocks in file with logfile\n" );
-  std::printf( "Numbers may be followed by a multiplier: b = blocks, k = kB = 10^3 = 1000,\n"
-               "Ki = KiB = 2^10 = 1024, M = 10^6, Mi = 2^20, G = 10^9, Gi = 2^30, etc...\n" );
-  std::printf( "\nReport bugs to bug-ddrescue@gnu.org\n"
+               "  -z, --or-logfile=<file>        OR the finished blocks in file with logfile\n"
+               "Numbers may be followed by a multiplier: b = blocks, k = kB = 10^3 = 1000,\n"
+               "Ki = KiB = 2^10 = 1024, M = 10^6, Mi = 2^20, G = 10^9, Gi = 2^30, etc...\n"
+               "\nReport bugs to bug-ddrescue@gnu.org\n"
                "Ddrescue home page: http://www.gnu.org/software/ddrescue/ddrescue.html\n"
                "General help using GNU software: http://www.gnu.org/gethelp\n" );
   }
 
 
 void set_types( const std::string & arg,
-                std::string & types1, std::string & types2 ) throw()
+                std::string & types1, std::string & types2 )
   {
   std::string * p = &types1;
   bool error = false, comma_found = false;
   types1.clear();
   types2.clear();
 
-  for( unsigned int i = 0; i < arg.size(); ++i )
+  for( unsigned i = 0; i < arg.size(); ++i )
     {
     const char ch = arg[i];
     if( ch == ',' )
@@ -105,7 +105,7 @@ void set_types( const std::string & arg,
   if( error )
     {
     char buf[80];
-    snprintf( buf, sizeof buf, "Invalid type for `change-types' option." );
+    snprintf( buf, sizeof buf, "Invalid type for 'change-types' option." );
     show_error( buf, 0, true );
     std::exit( 1 );
     }
@@ -115,14 +115,14 @@ void set_types( const std::string & arg,
 
 
 void set_types( const std::string & arg,
-                Sblock::Status & type1, Sblock::Status & type2 ) throw()
+                Sblock::Status & type1, Sblock::Status & type2 )
   {
   if( arg.size() == 0 ) return;
   if( arg.size() != 2 || arg[0] == arg[1] ||
       !Sblock::isstatus( arg[0] ) || !Sblock::isstatus( arg[1] ) )
     {
     char buf[80];
-    snprintf( buf, sizeof buf, "Invalid type for `create-logfile' option." );
+    snprintf( buf, sizeof buf, "Invalid type for 'create-logfile' option." );
     show_error( buf, 0, true );
     std::exit( 1 );
     }
@@ -131,12 +131,12 @@ void set_types( const std::string & arg,
   }
 
 
-void verify_logname_and_domain( const Logbook & logbook ) throw()
+void verify_logname_and_domain( const Logbook & logbook )
   {
   if( !logbook.logfile_exists() )
     {
     char buf[80];
-    snprintf( buf, sizeof buf, "Logfile `%s' does not exist.",
+    snprintf( buf, sizeof buf, "Logfile '%s' does not exist.",
               logbook.filename() );
     show_error( buf );
     std::exit( 1 );
@@ -221,7 +221,7 @@ int change_types( Domain & domain, const char * const logname,
     const Sblock & sb = logbook.sblock( i );
     if( !logbook.domain().includes( sb ) )
       { if( logbook.domain() < sb ) break; else continue; }
-    const unsigned int j = types1.find( sb.status() );
+    const unsigned j = types1.find( sb.status() );
     if( j < types1.size() )
       logbook.change_sblock_status( i, Sblock::Status( types2[j] ) );
     }
@@ -255,7 +255,7 @@ int compare_logfiles( Domain & domain, const char * const logname,
   if( retval )
     {
     char buf[80];
-    snprintf( buf, sizeof buf, "Logfiles `%s' and `%s' differ.",
+    snprintf( buf, sizeof buf, "Logfiles '%s' and '%s' differ.",
               logbook.filename(), logbook2.filename() );
     show_error( buf );
     }
@@ -272,7 +272,7 @@ int create_logfile( Domain & domain, const char * const logname,
   if( logbook.logfile_exists() )
     {
     snprintf( buf, sizeof buf,
-              "Logfile `%s' exists. Use `--force' to overwrite it.", logname );
+              "Logfile '%s' exists. Use '--force' to overwrite it.", logname );
     show_error( buf );
     return 1;
     }
@@ -321,7 +321,7 @@ int test_if_done( Domain & domain, const char * const logname, const bool del )
       {
       if( verbosity >= 1 )
         {
-        snprintf( buf, sizeof buf, "Logfile `%s' not done.", logname );
+        snprintf( buf, sizeof buf, "Logfile '%s' not done.", logname );
         show_error( buf );
         }
       return 1;
@@ -330,13 +330,13 @@ int test_if_done( Domain & domain, const char * const logname, const bool del )
   if( !del ) return 0;
   if( std::remove( logname ) != 0 )
     {
-    snprintf( buf, sizeof buf, "Error deleting logfile `%s'", logname );
+    snprintf( buf, sizeof buf, "Error deleting logfile '%s'", logname );
     show_error( buf, errno );
     return 1;
     }
   if( verbosity >= 1 )
     {
-    snprintf( buf, sizeof buf, "Logfile `%s' successfully deleted.", logname );
+    snprintf( buf, sizeof buf, "Logfile '%s' successfully deleted.", logname );
     show_error( buf );
     }
   return 0;
@@ -376,7 +376,7 @@ int to_badblocks( const long long offset, Domain & domain,
 // If 'prec' is negative, only the needed decimals are shown.
 //
 const char * format_percentage( long long num, long long den,
-                                const int iwidth = 3, int prec = -2 ) throw()
+                                const int iwidth = 3, int prec = -2 )
   {
   static char buf[80];
 
@@ -393,7 +393,7 @@ const char * format_percentage( long long num, long long den,
   const bool trunc = ( prec < 0 );
   if( prec < 0 ) prec = -prec;
 
-  unsigned int i;
+  unsigned i;
   if( num < 0 && num / den == 0 )
     i = snprintf( buf, sizeof( buf ), "%*s", iwidth, "-0" );
   else i = snprintf( buf, sizeof( buf ), "%*lld", iwidth, num / den );
@@ -558,7 +558,7 @@ int main( const int argc, const char * const argv[] )
       case 'i': ipos = getnum( arg, hardbs, 0 ); break;
       case 'l': set_mode( program_mode, m_list ); types1 = arg;
                 check_types( types1, "list-blocks" ); break;
-      case 'm': domain_logfile_name = arg; break;
+      case 'm': set_name( &domain_logfile_name, arg ); break;
       case 'n': set_mode( program_mode, m_invert ); break;
       case 'o': opos = getnum( arg, hardbs, 0 ); break;
       case 'p': set_mode( program_mode, m_compare );
@@ -566,7 +566,7 @@ int main( const int argc, const char * const argv[] )
       case 'q': verbosity = -1; break;
       case 's': max_size = getnum( arg, hardbs, -1 ); break;
       case 't': set_mode( program_mode, m_status ); break;
-      case 'v': verbosity = 1; break;
+      case 'v': if( verbosity < 4 ) ++verbosity; break;
       case 'V': show_version(); return 0;
       case 'x': set_mode( program_mode, m_xor );
                 second_logname = arg; break;

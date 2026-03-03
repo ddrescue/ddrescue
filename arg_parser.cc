@@ -36,7 +36,7 @@
 bool Arg_parser::parse_long_option( const char * const opt, const char * const arg,
                                     const Option options[], int & argind )
   {
-  unsigned int len;
+  unsigned len;
   int index = -1;
   bool exact = false, ambig = false;
 
@@ -56,30 +56,30 @@ bool Arg_parser::parse_long_option( const char * const opt, const char * const a
 
   if( ambig && !exact )
     {
-    error_ = "option `"; error_ += opt; error_ += "' is ambiguous";
+    error_ = "option '"; error_ += opt; error_ += "' is ambiguous";
     return false;
     }
 
   if( index < 0 )		// nothing found
     {
-    error_ = "unrecognized option `"; error_ += opt; error_ += '\'';
+    error_ = "unrecognized option '"; error_ += opt; error_ += '\'';
     return false;
     }
 
   ++argind;
   data.push_back( Record( options[index].code ) );
 
-  if( opt[len+2] )		// `--<long_option>=<argument>' syntax
+  if( opt[len+2] )		// '--<long_option>=<argument>' syntax
     {
     if( options[index].has_arg == no )
       {
-      error_ = "option `--"; error_ += options[index].name;
+      error_ = "option '--"; error_ += options[index].name;
       error_ += "' doesn't allow an argument";
       return false;
       }
     if( options[index].has_arg == yes && !opt[len+3] )
       {
-      error_ = "option `--"; error_ += options[index].name;
+      error_ = "option '--"; error_ += options[index].name;
       error_ += "' requires an argument";
       return false;
       }
@@ -91,7 +91,7 @@ bool Arg_parser::parse_long_option( const char * const opt, const char * const a
     {
     if( !arg || !arg[0] )
       {
-      error_ = "option `--"; error_ += options[index].name;
+      error_ = "option '--"; error_ += options[index].name;
       error_ += "' requires an argument";
       return false;
       }
@@ -178,7 +178,7 @@ Arg_parser::Arg_parser( const int argc, const char * const argv[],
   if( error_.size() ) data.clear();
   else
     {
-    for( unsigned int i = 0; i < non_options.size(); ++i )
+    for( unsigned i = 0; i < non_options.size(); ++i )
       { data.push_back( Record() ); data.back().argument.swap( non_options[i] ); }
     while( argind < argc )
       { data.push_back( Record() ); data.back().argument = argv[argind++]; }

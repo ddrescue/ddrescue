@@ -45,7 +45,7 @@ void input_pos_error( const long long pos, const long long isize )
 
 // Align pos to next boundary if size is big enough
 //
-void Block::align_pos( const int alignment ) throw()
+void Block::align_pos( const int alignment )
   {
   if( alignment > 1 )
     {
@@ -58,7 +58,7 @@ void Block::align_pos( const int alignment ) throw()
 
 // Align end to previous boundary if size is big enough
 //
-void Block::align_end( const int alignment ) throw()
+void Block::align_end( const int alignment )
   {
   if( alignment > 1 && size_ > 0 )
     {
@@ -68,7 +68,7 @@ void Block::align_end( const int alignment ) throw()
   }
 
 
-void Block::crop( const Block & b ) throw()
+void Block::crop( const Block & b )
   {
   const long long p = std::max( pos_, b.pos_ );
   const long long s = std::max( 0LL, std::min( end(), b.end() ) - p );
@@ -102,7 +102,7 @@ Block Block::split( long long pos, const int hardbs )
 
 void Domain::crop( const Block & b )
   {
-  for( unsigned int i = block_vector.size(); i > 0; )
+  for( unsigned i = block_vector.size(); i > 0; )
     {
     --i;
     block_vector[i].crop( b );
@@ -115,7 +115,7 @@ void Domain::crop( const Block & b )
 bool Domain::crop_by_file_size( const long long isize )
   {
   if( isize > 0 )
-    for( unsigned int i = 0; i < block_vector.size(); ++i )
+    for( unsigned i = 0; i < block_vector.size(); ++i )
       {
       if( block_vector[i].pos() >= isize )
         {

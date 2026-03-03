@@ -49,7 +49,10 @@ if [ $? = 0 ] ; then fail=1 ; printf - ; else printf . ; fi
 if [ $? = 0 ] ; then fail=1 ; printf - ; else printf . ; fi
 "${DDRESCUE}" -q -F- -g ${in} out logfile
 if [ $? = 0 ] ; then fail=1 ; printf - ; else printf . ; fi
+"${DDRESCUE}" -q -m ${logfile1} -m ${logfile1} ${in} out logfile
+if [ $? = 0 ] ; then fail=1 ; printf - ; else printf . ; fi
 
+if [ -r logfile ] ; then rm logfile || framework_failure ; fi
 "${DDRESCUE}" -t -pq -i15000 ${in} out logfile || fail=1
 "${DDRESCUE}" -D -fnq -s15000 ${in} out logfile || fail=1
 cmp ${in} out || fail=1
@@ -118,7 +121,7 @@ cat ${in2} > out || framework_failure
 rm logfile || framework_failure
 "${DDRESCUE}" -qt -x 35744 ${in1} copy || fail=1
 "${DDRESCUE}" -qg ${in} out logfile || fail=1
-"${DDRESCUE}" -qR copy out logfile || fail=1
+"${DDRESCUE}" -qR -T1.5d copy out logfile || fail=1
 cmp ${in} out || fail=1
 printf .
 

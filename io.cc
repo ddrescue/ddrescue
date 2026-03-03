@@ -38,30 +38,13 @@
 namespace {
 
 bool volatile interrupted_ = false;		// user pressed Ctrl-C
-extern "C" void sighandler( int ) throw() { interrupted_ = true; }
+extern "C" void sighandler( int ) { interrupted_ = true; }
 
 
-bool block_is_zero( const uint8_t * const buf, const int size ) throw()
+bool block_is_zero( const uint8_t * const buf, const int size )
   {
   for( int i = 0; i < size; ++i ) if( buf[i] != 0 ) return false;
   return true;
-  }
-
-
-const char * format_time( long t ) throw()
-  {
-  static char buf[16];
-  int fraction = 0;
-  char unit = 's';
-
-  if( t >= 86400 ) { fraction = ( t % 86400 ) / 8640; t /= 86400; unit = 'd'; }
-  else if( t >= 3600 ) { fraction = ( t % 3600 ) / 360; t /= 3600; unit = 'h'; }
-  else if( t >= 60 ) { fraction = ( t % 60 ) / 6; t /= 60; unit = 'm'; }
-  if( fraction == 0 )
-    snprintf( buf, sizeof buf, "%ld %c", t, unit );
-  else
-    snprintf( buf, sizeof buf, "%ld.%d %c", t, fraction, unit );
-  return buf;
   }
 
 
@@ -69,7 +52,7 @@ const char * format_time( long t ) throw()
 // If (returned value < size) and (errno == 0), means EOF was reached.
 //
 int readblock( const int fd, uint8_t * const buf, const int size,
-               const long long pos ) throw()
+               const long long pos )
   {
   int rest = size;
   errno = 0;
@@ -79,7 +62,7 @@ int readblock( const int fd, uint8_t * const buf, const int size,
       errno = 0;
       const int n = read( fd, buf + size - rest, rest );
       if( n > 0 ) rest -= n;
-      else if( n == 0 ) break;
+      else if( n == 0 ) break;				// EOF
       else if( errno != EINTR && errno != EAGAIN ) break;
       }
   return ( rest > 0 ) ? size - rest : size;
@@ -90,7 +73,7 @@ int readblock( const int fd, uint8_t * const buf, const int size,
 // If (returned value < size), it is always an error.
 //
 int writeblock( const int fd, const uint8_t * const buf, const int size,
-                const long long pos ) throw()
+                const long long pos )
   {
   int rest = size;
   errno = 0;
@@ -123,7 +106,7 @@ int Fillbook::fill_block( const Block & b )
   }
 
 
-void Fillbook::show_status( const long long ipos, bool force ) throw()
+void Fillbook::show_status( const long long ipos, bool force )
   {
   const char * const up = "\x1b[A";
   if( t0 == 0 )
@@ -157,7 +140,7 @@ void Fillbook::show_status( const long long ipos, bool force ) throw()
   }
 
 
-bool Fillbook::read_buffer( const int ides ) throw()
+bool Fillbook::read_buffer( const int ides )
   {
   const int rd = readblock( ides, iobuf(), softbs(), 0 );
   if( rd <= 0 ) return false;
@@ -193,7 +176,7 @@ void Genbook::check_block( const Block & b, int & copied_size, int & error_size 
 
 
 void Genbook::show_status( const long long ipos, const char * const msg,
-                           bool force ) throw()
+                           bool force )
   {
   const char * const up = "\x1b[A";
   if( t0 == 0 )
@@ -232,7 +215,7 @@ void Genbook::show_status( const long long ipos, const char * const msg,
   }
 
 
-bool Rescuebook::extend_outfile_size() throw()
+bool Rescuebook::extend_outfile_size()
   {
   if( min_outfile_size_ > 0 || sparse_size > 0 )
     {
@@ -280,14 +263,13 @@ int Rescuebook::copy_block( const Block & b, int & copied_size, int & error_size
   }
 
 
-void Rescuebook::update_status( const bool force ) throw()
+void Rescuebook::update_rates( const bool force )
   {
   if( t0 == 0 )
     {
     t0 = t1 = ts = std::time( 0 );
     first_size = last_size = recsize;
-    last_errsize = errsize;
-    status_changed = true;
+    rates_updated = true;
     if( verbosity >= 0 ) std::printf( "\n\n\n" );
     }
 
@@ -297,28 +279,30 @@ void Rescuebook::update_status( const bool force ) throw()
     {
     a_rate = ( recsize - first_size ) / ( t2 - t0 );
     c_rate = ( recsize - last_size ) / ( t2 - t1 );
-    if( recsize > last_size ) ts = t2;
-    last_size = recsize;
-    if( max_error_rate_ >= 0 )
+    if( !( e_code & 4 ) )
       {
-      long long e_rate = errsize - last_errsize;
-      last_errsize = errsize;
-      e_rate /= ( t2 - t1 );
-      if( e_rate > max_error_rate_ ) e_code |= 1;
+      if( recsize != last_size ) { last_size = recsize; ts = t2; }
+      else if( timeout_ >= 0 && t2 - ts > timeout_ ) e_code |= 4;
+      }
+    if( max_error_rate_ >= 0 && !( e_code & 1 ) )
+      {
+      error_rate /= ( t2 - t1 );
+      if( error_rate > max_error_rate_ ) e_code |= 1;
+      else error_rate = 0;
       }
     t1 = t2;
-    status_changed = true;
+    rates_updated = true;
     }
   }
 
 
 void Rescuebook::show_status( const long long ipos, const char * const msg,
-                              const bool force ) throw()
+                              const bool force )
   {
   const char * const up = "\x1b[A";
 
   if( ipos >= 0 ) last_ipos = ipos;
-  if( status_changed || force )
+  if( rates_updated || force )
     {
     if( verbosity >= 0 )
       {
@@ -330,9 +314,9 @@ void Rescuebook::show_status( const long long ipos, const char * const msg,
                    format_num( last_ipos ), errors );
       std::printf( "  average rate: %9sB/s\n", format_num( a_rate, 99999 ) );
       std::printf( "   opos: %10sB,", format_num( last_ipos + offset() ) );
-      std::printf( "     time from last successful read: %9s\n",
+      std::printf( "     time since last successful read: %9s\n",
                    format_time( t1 - ts ) );
-      if( msg && msg[0] && !too_many_errors() )
+      if( msg && msg[0] && !errors_or_timeout() )
         {
         const int len = std::strlen( msg ); std::printf( "%s", msg );
         for( int i = len; i < oldlen; ++i ) std::fputc( ' ', stdout );
@@ -341,15 +325,32 @@ void Rescuebook::show_status( const long long ipos, const char * const msg,
         }
       std::fflush( stdout );
       }
-    status_changed = false;
+    rates_updated = false;
     }
   }
 
 
-bool interrupted() throw() { return interrupted_; }
+const char * format_time( long t )
+  {
+  static char buf[16];
+  int fraction = 0;
+  char unit = 's';
+
+  if( t >= 86400 ) { fraction = ( t % 86400 ) / 8640; t /= 86400; unit = 'd'; }
+  else if( t >= 3600 ) { fraction = ( t % 3600 ) / 360; t /= 3600; unit = 'h'; }
+  else if( t >= 60 ) { fraction = ( t % 60 ) / 6; t /= 60; unit = 'm'; }
+  if( fraction == 0 )
+    snprintf( buf, sizeof buf, "%ld %c", t, unit );
+  else
+    snprintf( buf, sizeof buf, "%ld.%d %c", t, fraction, unit );
+  return buf;
+  }
 
 
-void set_signals() throw()
+bool interrupted() { return interrupted_; }
+
+
+void set_signals()
   {
   interrupted_ = false;
   std::signal( SIGINT, sighandler );

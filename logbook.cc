@@ -36,7 +36,7 @@
 
 namespace {
 
-int my_fgetc( FILE * const f ) throw()
+int my_fgetc( FILE * const f )
   {
   int ch;
   bool comment = false;
@@ -52,14 +52,15 @@ int my_fgetc( FILE * const f ) throw()
 
 
 // Read a line discarding comments, leading whitespace and blank lines.
+// Returns 0 if at EOF.
 //
-const char * my_fgets( FILE * const f, int & linenum ) throw()
+const char * my_fgets( FILE * const f, int & linenum )
   {
   const int maxlen = 127;
   static char buf[maxlen+1];
   int ch, len = 1;
 
-  while( len == 1 )
+  while( len == 1 )			// while line is blank
     {
     do { ch = my_fgetc( f ); if( ch == '\n' ) ++linenum; }
     while( std::isspace( ch ) );
@@ -82,7 +83,7 @@ void extend_sblock_vector( std::vector< Sblock > & sblock_vector,
   {
   if( sblock_vector.size() == 0 )
     {
-    Sblock sb( 0, (isize > 0) ? isize : -1, Sblock::non_tried );
+    Sblock sb( 0, ( isize > 0 ) ? isize : -1, Sblock::non_tried );
     sb.fix_size();
     sblock_vector.push_back( sb );
     return;
@@ -185,11 +186,11 @@ Domain::Domain( const long long p, const long long s,
     {
     char buf[80];
     snprintf( buf, sizeof buf,
-              "Logfile `%s' does not exist or is not readable.", logname );
+              "Logfile '%s' does not exist or is not readable.", logname );
     show_error( buf );
     std::exit( 1 );
     }
-  for( unsigned int i = 0; i < sblock_vector.size(); ++i )
+  for( unsigned i = 0; i < sblock_vector.size(); ++i )
     {
     const Sblock & sb = sblock_vector[i];
     if( sb.status() == Sblock::finished ) block_vector.push_back( sb );
@@ -200,7 +201,7 @@ Domain::Domain( const long long p, const long long s,
 
 void Logbook::split_domain_border_sblocks()
   {
-  for( unsigned int i = 0; i < sblock_vector.size(); ++i )
+  for( unsigned i = 0; i < sblock_vector.size(); ++i )
     {
     Sblock & sb = sblock_vector[i];
     const long long pos = domain_.breaks_block_by( sb );
@@ -252,9 +253,9 @@ Logbook::Logbook( const long long offset, const long long isize,
   }
 
 
-bool Logbook::blank() const throw()
+bool Logbook::blank() const
   {
-  for( unsigned int i = 0; i < sblock_vector.size(); ++i )
+  for( unsigned i = 0; i < sblock_vector.size(); ++i )
     if( sblock_vector[i].status() != Sblock::non_tried )
       return false;
   return true;
@@ -263,7 +264,7 @@ bool Logbook::blank() const throw()
 
 void Logbook::compact_sblock_vector()
   {
-  for( unsigned int i = sblock_vector.size(); i >= 2; )
+  for( unsigned i = sblock_vector.size(); i >= 2; )
     {
     --i;
     if( sblock_vector[i-1].join( sblock_vector[i] ) )
@@ -296,8 +297,8 @@ bool Logbook::update_logfile( const int odes, const bool force,
   if( verbosity >= 0 )
     {
     char buf[80];
-    const char * const s = ( f ? "Error writing logfile `%s'" :
-                                 "Error opening logfile `%s' for writing" );
+    const char * const s = ( f ? "Error writing logfile '%s'" :
+                                 "Error opening logfile '%s' for writing" );
     snprintf( buf, sizeof buf, s, filename_ );
     if( retry ) std::fprintf( stderr, "\n" );
     show_error( buf, errno );
@@ -321,13 +322,13 @@ bool Logbook::update_logfile( const int odes, const bool force,
   }
 
 
-void Logbook::write_logfile( FILE * const f ) const throw()
+void Logbook::write_logfile( FILE * const f ) const
   {
   write_logfile_header( f );
   std::fprintf( f, "# current_pos  current_status\n" );
   std::fprintf( f, "0x%08llX     %c\n", current_pos_, current_status_ );
   std::fprintf( f, "#      pos        size  status\n" );
-  for( unsigned int i = 0; i < sblock_vector.size(); ++i )
+  for( unsigned i = 0; i < sblock_vector.size(); ++i )
     {
     const Sblock & sb = sblock_vector[i];
     std::fprintf( f, "0x%08llX  0x%08llX  %c\n", sb.pos(), sb.size(), sb.status() );
@@ -353,7 +354,7 @@ void Logbook::truncate_vector( const long long pos )
   }
 
 
-int Logbook::find_index( const long long pos ) const throw()
+int Logbook::find_index( const long long pos ) const
   {
   if( index_ < 0 || index_ >= sblocks() ) index_ = sblocks() / 2;
   while( index_ + 1 < sblocks() && pos >= sblock_vector[index_].end() )
@@ -494,7 +495,7 @@ int Logbook::change_chunk_status( const Block & b, const Sblock::Status st )
   }
 
 
-const char * Logbook::status_name( const Logbook::Status st ) throw()
+const char * Logbook::status_name( const Logbook::Status st )
   {
   switch( st )
     {
