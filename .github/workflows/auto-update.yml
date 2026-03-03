@@ -1,0 +1,101 @@
+name: Auto Update from GNU
+
+on:
+  schedule:
+    # Run daily at 00:00 UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lzip curl
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check for new versions
+        id: check
+        run: |
+          # Get current latest version from tags
+          CURRENT_VERSION=$(git tag | sort -V | tail -1 | sed 's/v//')
+          echo "Current version: $CURRENT_VERSION"
+          
+          # Get available versions from GNU FTP
+          AVAILABLE_VERSIONS=$(curl -sL "https://ftp.gnu.org/gnu/ddrescue/" | grep -oE 'ddrescue-[0-9]+\.[0-9]+\.tar\.lz' | sed 's/ddrescue-//;s/\.tar\.lz//' | sort -V | uniq)
+          LATEST_VERSION=$(echo "$AVAILABLE_VERSIONS" | tail -1)
+          echo "Latest GNU version: $LATEST_VERSION"
+          
+          # Check if we need to update
+          if [ "$CURRENT_VERSION" != "$LATEST_VERSION" ]; then
+            # Check if the new version already exists as a tag
+            if git tag | grep -q "v$LATEST_VERSION"; then
+              echo "Version v$LATEST_VERSION already exists, skipping"
+              echo "needs_update=false" >> $GITHUB_OUTPUT
+            else
+              echo "New version available: $LATEST_VERSION"
+              echo "needs_update=true" >> $GITHUB_OUTPUT
+              echo "new_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "Already up to date"
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download and import new version
+        if: steps.check.outputs.needs_update == 'true'
+        run: |
+          VERSION=${{ steps.check.outputs.new_version }}
+          echo "Importing version $VERSION..."
+          
+          # Download tarball
+          curl -LO "https://ftp.gnu.org/gnu/ddrescue/ddrescue-${VERSION}.tar.lz"
+          
+          # Extract
+          tar -x --lzip -f "ddrescue-${VERSION}.tar.lz"
+          
+          # Remove old files (except .git and .github)
+          find . -maxdepth 1 -not -name '.' -not -name '.git' -not -name '.github' -not -name "ddrescue-${VERSION}" -not -name "ddrescue-${VERSION}.tar.lz" -exec rm -rf {} \; 2>/dev/null || true
+          
+          # Copy new files
+          cp -r "ddrescue-${VERSION}"/* .
+          
+          # Clean up
+          rm -rf "ddrescue-${VERSION}" "ddrescue-${VERSION}.tar.lz"
+          
+          # Commit and tag
+          git add -A
+          git commit -m "ddrescue version $VERSION" --allow-empty
+          git tag "v$VERSION"
+          
+          echo "Successfully imported version $VERSION"
+
+      - name: Push changes
+        if: steps.check.outputs.needs_update == 'true'
+        run: |
+          VERSION=${{ steps.check.outputs.new_version }}
+          git push origin master
+          git push origin "v$VERSION"
+          echo "Pushed version $VERSION to repository"
+
+      - name: Summary
+        run: |
+          if [ "${{ steps.check.outputs.needs_update }}" == "true" ]; then
+            echo "Updated to version ${{ steps.check.outputs.new_version }}"
+          else
+            echo "No updates needed - repository is up to date"
+          fi
