@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2014 Antonio Diaz Diaz.
+    Copyright (C) 2004-2015 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -45,10 +45,10 @@ void Block::align_pos( const int alignment )
 //
 void Block::align_end( const int alignment )
   {
-  if( alignment > 1 && size_ > 0 )
+  if( alignment > 1 )
     {
-    const long long new_end = end() - ( end() % alignment );
-    if( pos_ < new_end ) size_ = new_end - pos_;
+    const int rest = end() % alignment;
+    if( size_ > rest ) size_ -= rest;
     }
   }
 
@@ -95,23 +95,23 @@ Block Block::split( long long pos, const int hardbs )
 
 
 Domain::Domain( const long long p, const long long s,
-                const char * const logname, const bool loose )
+                const char * const mapname, const bool loose )
   {
   const Block b( p, s );
-  if( !logname || !logname[0] ) { block_vector.push_back( b ); return; }
-  Logfile logfile( logname );
-  if( !logfile.read_logfile( loose ? '?' : 0 ) )
+  if( !mapname || !mapname[0] ) { block_vector.push_back( b ); return; }
+  Mapfile mapfile( mapname );
+  if( !mapfile.read_mapfile( loose ? '?' : 0 ) )
     {
     char buf[80];
     snprintf( buf, sizeof buf,
-              "Logfile '%s' does not exist or is not readable.", logname );
+              "Mapfile '%s' does not exist or is not readable.", mapname );
     show_error( buf );
     std::exit( 1 );
     }
-  logfile.compact_sblock_vector();
-  for( int i = 0; i < logfile.sblocks(); ++i )
+  mapfile.compact_sblock_vector();
+  for( long i = 0; i < mapfile.sblocks(); ++i )
     {
-    const Sblock & sb = logfile.sblock( i );
+    const Sblock & sb = mapfile.sblock( i );
     if( sb.status() == Sblock::finished ) block_vector.push_back( sb );
     }
   if( block_vector.empty() ) block_vector.push_back( Block( 0, 0 ) );
@@ -121,7 +121,7 @@ Domain::Domain( const long long p, const long long s,
 
 void Domain::crop( const Block & b )
   {
-  unsigned r = block_vector.size();
+  unsigned long r = block_vector.size();
   while( r > 0 && b < block_vector[r-1] ) --r;
   if( r > 0 ) block_vector[r-1].crop( b );
   if( r <= 0 || block_vector[r-1].size() <= 0 )	// no block overlaps b
@@ -130,7 +130,7 @@ void Domain::crop( const Block & b )
     block_vector.erase( block_vector.begin() + r, block_vector.end() );
   if( b.pos() <= 0 ) return;
   --r;		// block_vector[r] is now the last non-cropped-out block
-  unsigned l = 0;
+  unsigned long l = 0;
   while( l < r && block_vector[l] < b ) ++l;
   if( l < r ) block_vector[l].crop( b );	// crop block overlapping b
   if( l > 0 )					// remove blocks before b

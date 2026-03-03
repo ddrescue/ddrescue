@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2014 Antonio Diaz Diaz.
+    Copyright (C) 2004-2015 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -19,10 +19,13 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
+#include <unistd.h>
 
 #include "block.h"
 
@@ -65,24 +68,24 @@ const char * my_fgets( FILE * const f, int & linenum )
   }
 
 
-void show_logfile_error( const char * const logname, const int linenum )
+void show_mapfile_error( const char * const mapname, const int linenum )
   {
   char buf[80];
-  snprintf( buf, sizeof buf, "error in logfile %s, line %d.", logname, linenum );
+  snprintf( buf, sizeof buf, "error in mapfile %s, line %d.", mapname, linenum );
   show_error( buf );
   }
 
 } // end namespace
 
 
-void Logfile::compact_sblock_vector()
+void Mapfile::compact_sblock_vector()
   {
   std::vector< Sblock > new_vector;
-  unsigned l = 0;
+  unsigned long l = 0;
   while( l < sblock_vector.size() )
     {
     Sblock run = sblock_vector[l];
-    unsigned r = l + 1;
+    unsigned long r = l + 1;
     while( r < sblock_vector.size() &&
            sblock_vector[r].status() == run.status() ) ++r;
     if( r > l + 1 ) run.size( sblock_vector[r-1].end() - run.pos() );
@@ -93,7 +96,7 @@ void Logfile::compact_sblock_vector()
   }
 
 
-void Logfile::extend_sblock_vector( const long long isize )
+void Mapfile::extend_sblock_vector( const long long isize )
   {
   if( sblock_vector.empty() )
     {
@@ -112,7 +115,7 @@ void Logfile::extend_sblock_vector( const long long isize )
       {
       if( back.pos() == isize && back.status() != Sblock::finished )
         { sblock_vector.pop_back(); return; }
-      show_error( "Last block in logfile begins past end of input file.\n"
+      show_error( "Last block in mapfile begins past end of input file.\n"
                   "          Use '-C' if you are reading from a partial copy.",
                   0, true );
       std::exit( 1 );
@@ -121,7 +124,7 @@ void Logfile::extend_sblock_vector( const long long isize )
       {
       if( back.status() != Sblock::finished )
         { back.size( isize - back.pos() ); return; }
-      show_error( "Rescued data in logfile goes past end of input file.\n"
+      show_error( "Rescued data in mapfile goes past end of input file.\n"
                   "          Use '-C' if you are reading from a partial copy.",
                   0, true );
       std::exit( 1 );
@@ -140,12 +143,12 @@ void Logfile::extend_sblock_vector( const long long isize )
 // Returns false only if truncation would remove finished blocks and
 // force is false.
 //
-bool Logfile::truncate_vector( const long long end, const bool force )
+bool Mapfile::truncate_vector( const long long end, const bool force )
   {
-  unsigned i = sblock_vector.size();
+  unsigned long i = sblock_vector.size();
   while( i > 0 && sblock_vector[i-1].pos() >= end ) --i;
   if( !force )
-    for( unsigned j = i; j < sblock_vector.size(); ++j )
+    for( unsigned long j = i; j < sblock_vector.size(); ++j )
       if( sblock_vector[j].status() == Sblock::finished ) return false;
   if( i == 0 )
     {
@@ -166,16 +169,21 @@ bool Logfile::truncate_vector( const long long end, const bool force )
   }
 
 
-// Returns true if logfile exists and is readable.
+// Returns true if mapfile exists and is readable.
 // Fills the gaps if 'default_sblock_status' is a valid status character.
 //
-bool Logfile::read_logfile( const int default_sblock_status )
+bool Mapfile::read_mapfile( const int default_sblock_status, const bool ro )
   {
-  FILE * const f = std::fopen( filename_, "r" );
+  FILE * f = 0;
+  errno = 0;
+  read_only_ = ro;
+  if( ro && std::strcmp( filename_, "-" ) == 0 && !isatty( fileno( stdin ) ) )
+    f = stdin;
+  else if( ro || ( !(f = std::fopen( filename_, "r+" )) && errno != ENOENT ) )
+    { f = std::fopen( filename_, "r" ); read_only_ = true; }
   if( !f ) return false;
   int linenum = 0;
   const bool loose = Sblock::isstatus( default_sblock_status );
-  read_only_ = false;
   sblock_vector.clear();
 
   const char * line = my_fgets( f, linenum );
@@ -186,11 +194,7 @@ bool Logfile::read_logfile( const int default_sblock_status )
     if( n == 2 && current_pos_ >= 0 && isstatus( ch ) )
       current_status_ = Status( ch );
     else
-      {
-      show_logfile_error( filename_, linenum );
-      show_error( "Are you using a logfile from ddrescue 1.5 or older?" );
-      std::exit( 2 );
-      }
+      { show_mapfile_error( filename_, linenum ); std::exit( 2 ); }
 
     while( true )
       {
@@ -212,35 +216,34 @@ bool Logfile::read_logfile( const int default_sblock_status )
                                 Sblock::Status( default_sblock_status ) );
               sblock_vector.push_back( sb2 ); }
           else if( end > 0 )
-            { show_logfile_error( filename_, linenum ); std::exit( 2 ); }
+            { show_mapfile_error( filename_, linenum ); std::exit( 2 ); }
           }
         sblock_vector.push_back( sb );
         }
       else
-        { show_logfile_error( filename_, linenum ); std::exit( 2 ); }
+        { show_mapfile_error( filename_, linenum ); std::exit( 2 ); }
       }
     }
-  if( std::ferror( f ) )
-    { show_logfile_error( filename_, linenum ); std::exit( 2 ); }
-  if( std::freopen( filename_, "r+", f ) ) std::fclose( f );
-  else read_only_ = true;
+  if( std::ferror( f ) || !std::feof( f ) || std::fclose( f ) != 0 )
+    { show_mapfile_error( filename_, linenum ); std::exit( 2 ); }
   return true;
   }
 
 
-int Logfile::write_logfile( FILE * f, const bool timestamp ) const
+int Mapfile::write_mapfile( FILE * f, const bool timestamp ) const
   {
   const bool f_given = ( f != 0 );
 
   if( !f && !filename_ ) return false;
   if( !f ) { f = std::fopen( filename_, "w" ); if( !f ) return false; }
-  write_logfile_header( f, "Rescue" );
+  write_file_header( f, "Mapfile" );
   if( timestamp ) write_timestamp( f );
   if( current_msg.size() ) std::fprintf( f, "# %s\n", current_msg.c_str() );
-  std::fprintf( f, "# current_pos  current_status\n" );
-  std::fprintf( f, "0x%08llX     %c\n", current_pos_, current_status_ );
-  std::fprintf( f, "#      pos        size  status\n" );
-  for( unsigned i = 0; i < sblock_vector.size(); ++i )
+  std::fprintf( f, "# current_pos  current_status\n"
+                   "0x%08llX     %c\n"
+                   "#      pos        size  status\n",
+                current_pos_, current_status_ );
+  for( unsigned long i = 0; i < sblock_vector.size(); ++i )
     {
     const Sblock & sb = sblock_vector[i];
     std::fprintf( f, "0x%08llX  0x%08llX  %c\n", sb.pos(), sb.size(), sb.status() );
@@ -249,21 +252,21 @@ int Logfile::write_logfile( FILE * f, const bool timestamp ) const
   }
 
 
-bool Logfile::blank() const
+bool Mapfile::blank() const
   {
-  for( unsigned i = 0; i < sblock_vector.size(); ++i )
+  for( unsigned long i = 0; i < sblock_vector.size(); ++i )
     if( sblock_vector[i].status() != Sblock::non_tried )
       return false;
   return true;
   }
 
 
-void Logfile::split_by_domain_borders( const Domain & domain )
+void Mapfile::split_by_domain_borders( const Domain & domain )
   {
   if( domain.blocks() == 1 )
     {
     const Block & db = domain.block( 0 );
-    unsigned i = 0;
+    unsigned long i = 0;
     while( i < sblock_vector.size() && sblock_vector[i] < db ) ++i;
     if( i < sblock_vector.size() ) try_split_sblock_by( db.pos(), i );
     i = sblock_vector.size();
@@ -273,8 +276,8 @@ void Logfile::split_by_domain_borders( const Domain & domain )
   else
     {
     std::vector< Sblock > new_vector;
-    int j = 0;
-    for( unsigned i = 0; i < sblock_vector.size(); )
+    long j = 0;
+    for( unsigned long i = 0; i < sblock_vector.size(); )
       {
       Sblock & sb = sblock_vector[i];
       while( j < domain.blocks() && domain.block( j ) < sb ) ++j;
@@ -294,19 +297,19 @@ void Logfile::split_by_domain_borders( const Domain & domain )
   }
 
 
-void Logfile::split_by_logfile_borders( const Logfile & logfile )
+void Mapfile::split_by_mapfile_borders( const Mapfile & mapfile )
   {
   std::vector< Sblock > new_vector;
-  int j = 0;
-  for( unsigned i = 0; i < sblock_vector.size(); )
+  long j = 0;
+  for( unsigned long i = 0; i < sblock_vector.size(); )
     {
     Sblock & sb = sblock_vector[i];
-    while( j < logfile.sblocks() && logfile.sblock( j ) < sb ) ++j;
-    if( j >= logfile.sblocks() )		// end of logfile tail copy
+    while( j < mapfile.sblocks() && mapfile.sblock( j ) < sb ) ++j;
+    if( j >= mapfile.sblocks() )		// end of mapfile tail copy
       { new_vector.insert( new_vector.end(),
                            sblock_vector.begin() + i, sblock_vector.end() );
         break; }
-    const Sblock & db = logfile.sblock( j );
+    const Sblock & db = mapfile.sblock( j );
     if( sb.strictly_includes( db.pos() ) )
       new_vector.push_back( sb.split( db.pos() ) );
     if( sb.strictly_includes( db.end() ) )
@@ -317,10 +320,10 @@ void Logfile::split_by_logfile_borders( const Logfile & logfile )
   }
 
 
-int Logfile::find_index( const long long pos ) const
+long Mapfile::find_index( const long long pos ) const
   {
   if( index_ < 0 || index_ >= sblocks() ) index_ = sblocks() / 2;
-  while( index_ + 1 < sblocks() && pos >= sblock_vector[index_].end() )
+  while( index_ + 1 < sblocks() && pos >= sblock_vector[index_+1].pos() )
     ++index_;
   while( index_ > 0 && pos < sblock_vector[index_].pos() )
     --index_;
@@ -332,14 +335,14 @@ int Logfile::find_index( const long long pos ) const
 // Find chunk from b.pos of size <= b.size and status st.
 // If not found, put b.size to 0.
 //
-void Logfile::find_chunk( Block & b, const Sblock::Status st,
+void Mapfile::find_chunk( Block & b, const Sblock::Status st,
                           const Domain & domain, const int alignment ) const
   {
   if( b.size() <= 0 ) return;
   if( b.pos() < sblock_vector.front().pos() )
     b.pos( sblock_vector.front().pos() );
   if( find_index( b.pos() ) < 0 ) { b.size( 0 ); return; }
-  int i;
+  long i;
   for( i = index_; i < sblocks(); ++i )
     if( sblock_vector[i].status() == st && domain.includes( sblock_vector[i] ) )
       { index_ = i; break; }
@@ -356,14 +359,14 @@ void Logfile::find_chunk( Block & b, const Sblock::Status st,
 // Find chunk from b.end backwards of size <= b.size and status st.
 // If not found, put b.size to 0.
 //
-void Logfile::rfind_chunk( Block & b, const Sblock::Status st,
+void Mapfile::rfind_chunk( Block & b, const Sblock::Status st,
                            const Domain & domain, const int alignment ) const
   {
   if( b.size() <= 0 ) return;
   if( sblock_vector.back().end() < b.end() )
     b.end( sblock_vector.back().end() );
   if( find_index( b.end() - 1 ) < 0 ) { b.size( 0 ); return; }
-  int i;
+  long i;
   for( i = index_; i >= 0; --i )
     if( sblock_vector[i].status() == st && domain.includes( sblock_vector[i] ) )
       { index_ = i; break; }
@@ -388,7 +391,7 @@ void Logfile::rfind_chunk( Block & b, const Sblock::Status st,
 //   + + -   -->   + - -   return  0
 //   + + +   -->   + - +   return +1
 //
-int Logfile::change_chunk_status( const Block & b, const Sblock::Status st,
+int Mapfile::change_chunk_status( const Block & b, const Sblock::Status st,
                                   const Domain & domain )
   {
   if( b.size() <= 0 ) return 0;
@@ -397,16 +400,17 @@ int Logfile::change_chunk_status( const Block & b, const Sblock::Status st,
     internal_error( "can't change status of chunk not in rescue domain." );
   if( !sblock_vector[index_].includes( b ) )
     internal_error( "can't change status of chunk spread over more than 1 block." );
-  if( sblock_vector[index_].status() == st ) return 0;
-
-  const bool old_st_good = Sblock::is_good_status( sblock_vector[index_].status() );
+  const Sblock::Status old_st = sblock_vector[index_].status();
+  if( st == old_st ) return 0;
+  const bool old_st_good = Sblock::is_good_status( old_st );
   const bool new_st_good = Sblock::is_good_status( st );
   bool bl_st_good = ( index_ <= 0 ||
-                      !domain.includes( sblock_vector[index_-1] ) ||
-                      Sblock::is_good_status( sblock_vector[index_-1].status() ) );
+                      Sblock::is_good_status( sblock_vector[index_-1].status() ) ||
+                      !domain.includes( sblock_vector[index_-1] ) );
   bool br_st_good = ( index_ + 1 >= sblocks() ||
-                      !domain.includes( sblock_vector[index_+1] ) ||
-                      Sblock::is_good_status( sblock_vector[index_+1].status() ) );
+                      Sblock::is_good_status( sblock_vector[index_+1].status() ) ||
+                      !domain.includes( sblock_vector[index_+1] ) );
+
   if( sblock_vector[index_].pos() < b.pos() )
     {
     if( sblock_vector[index_].end() == b.end() &&
@@ -422,28 +426,30 @@ int Logfile::change_chunk_status( const Block & b, const Sblock::Status st,
     }
   if( sblock_vector[index_].size() > b.size() )
     {
-    br_st_good = Sblock::is_good_status( sblock_vector[index_].status() );
     if( index_ > 0 && sblock_vector[index_-1].status() == st &&
         domain.includes( sblock_vector[index_-1] ) )
       sblock_vector[index_-1].shift( sblock_vector[index_], b.end() );
     else
       insert_sblock( index_,
                      Sblock( sblock_vector[index_].split( b.end() ), st ) );
+    br_st_good = old_st_good;
     }
   else
     {
     sblock_vector[index_].status( st );
-    if( index_ > 0 && sblock_vector[index_-1].status() == st &&
-        domain.includes( sblock_vector[index_-1] ) )
+    const bool bl_join = ( index_ > 0 &&
+                           sblock_vector[index_-1].status() == st &&
+                           domain.includes( sblock_vector[index_-1] ) );
+    const bool br_join = ( index_ + 1 < sblocks() &&
+                           sblock_vector[index_+1].status() == st &&
+                           domain.includes( sblock_vector[index_+1] ) );
+    if( bl_join || br_join )
       {
-      sblock_vector[index_-1].join( sblock_vector[index_] );
-      erase_sblock( index_ ); --index_;
-      }
-    if( index_ + 1 < sblocks() && sblock_vector[index_+1].status() == st &&
-        domain.includes( sblock_vector[index_+1] ) )
-      {
-      sblock_vector[index_].join( sblock_vector[index_+1] );
-      erase_sblock( index_ + 1 );
+      if( br_join ) sblock_vector[index_].join( sblock_vector[index_+1] );
+      if( bl_join )
+        { --index_; sblock_vector[index_].join( sblock_vector[index_+1] ); }
+      sblock_vector.erase( sblock_vector.begin() + ( index_ + 1 ),
+                           sblock_vector.begin() + ( index_ + 1 + bl_join + br_join ) );
       }
     }
   int retval = 0;
@@ -453,7 +459,7 @@ int Logfile::change_chunk_status( const Block & b, const Sblock::Status st,
   }
 
 
-const char * Logfile::status_name( const Logfile::Status st )
+const char * Mapfile::status_name( const Mapfile::Status st )
   {
   switch( st )
     {

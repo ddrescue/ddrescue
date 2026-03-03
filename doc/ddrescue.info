@@ -12,7 +12,7 @@ File: ddrescue.info,  Node: Top,  Next: Introduction,  Up: (dir)
 GNU ddrescue Manual
 *******************
 
-This manual is for GNU ddrescue (version 1.19, 3 October 2014).
+This manual is for GNU ddrescue (version 1.20, 10 September 2015).
 
 * Menu:
 
@@ -21,18 +21,20 @@ This manual is for GNU ddrescue (version 1.19, 3 October 2014).
 * Important advice::      Read this or risk losing your data
 * Algorithm::             How ddrescue recovers the data
 * Invoking ddrescue::     Command line interface
-* Logfile structure::     Detailed format of the logfile
+* Mapfile structure::     Detailed format of the mapfile
+* Emergency save::        Saving the mapfile in case of trouble
+* Optical media::         Copying CD-ROMs and DVDs
 * Examples::              A small tutorial with examples
 * Direct disc access::    Bypassing the kernel cache
 * Fill mode::             Selectively overwriting the output file
-* Generate mode::         Generating an approximate logfile
-* Ddrescuelog::           Tool for ddrescue logfiles
+* Generate mode::         Generating an approximate mapfile
+* Ddrescuelog::           Tool for ddrescue mapfiles
 * Invoking ddrescuelog::  Command line interface
 * Problems::              Reporting bugs
 * Concept index::         Index of concepts
 
 
-   Copyright (C) 2004-2014 Antonio Diaz Diaz.
+   Copyright (C) 2004-2015 Antonio Diaz Diaz.
 
    This manual is free documentation: you have unlimited permission to
 copy, distribute and modify it.
@@ -48,12 +50,14 @@ block device (hard disc, cdrom, etc) to another, trying to rescue the
 good parts first in case of read errors.
 
    The basic operation of ddrescue is fully automatic. That is, you
-don't have to wait for an error, stop the program, read the log,
-restart it from a new position, etc.
+don't have to wait for an error, stop the program, restart it from a new
+position, etc.
 
-   If you use the logfile feature of ddrescue, the data is rescued very
+   If you use the mapfile feature of ddrescue, the data is rescued very
 efficiently, (only the needed blocks are read). Also you can interrupt
-the rescue at any time and resume it later at the same point.
+the rescue at any time and resume it later at the same point. The
+mapfile is an essential part of ddrescue's effectiveness. Use it unless
+you know what you are doing.
 
    Ddrescue does not write zeros to the output when it finds bad
 sectors in the input, and does not truncate the output file if not
@@ -65,23 +69,17 @@ of a file, cdrom, etc, and run ddrescue on all of them, one at a time,
 with the same output file, you will probably obtain a complete and
 error-free file. This is so because the probability of having the same
 area damaged in all copies is low (if the errors are randomly located).
-Using the logfile, only the needed blocks are read from the second and
+Using the mapfile, only the needed blocks are read from the second and
 successive copies.
 
    Ddrescue recommends lzip for compression of backups because the lzip
-format is designed for long-term data archiving and provides data
-recovery capabilities which nicely complement those of ddrescue.
-(Ddrescue fills unreadable sectors with data from other copies, while
-lziprecover corrects corrupt sectors with data from other copies). If
-the cause of file corruption is damaged media, the combination ddrescue
-+ lziprecover is the best option for recovering data from multiple
-damaged copies. *Note lziprecover-example::, for an example.
-
-   Recordable CD and DVD media keep their data only for a finite time
-(typically for many years). After that time, data loss develops slowly
-with read errors growing from the outer media region towards the inside.
-Just make two (or more) copies of every important CD/DVD you burn so
-that you can later recover them with ddrescue.
+format is designed for long-term archiving and provides data recovery
+capabilities which nicely complement those of ddrescue. (Ddrescue fills
+unreadable sectors with data from other copies, while lziprecover
+corrects corrupt sectors with data from other copies). If the cause of
+file corruption is damaged media, the combination ddrescue + lziprecover
+is the best option for recovering data from multiple damaged copies.
+*Note lziprecover-example::, for an example.
 
    Because ddrescue needs to read and write at random places, it only
 works on seekable (random access) input and output files.
@@ -130,15 +128,23 @@ Partition
 Recoverable formats
      As ddrescue uses standard library functions to read data from the
      device being rescued, only mountable device formats can be rescued
-     with ddrescue. DVDs can be mounted and they can be rescued,
-     "compact disc digital audio" CDs can't, "video CDs"[1] maybe.
+     with ddrescue. CD-ROMs and DVDs can be mounted and they can be
+     rescued, "compact disc digital audio" CDs can't, "video CDs"[1]
+     maybe.
      [1] http://en.wikipedia.org/wiki/Video_CD
 
 Rescue domain
      Block or set of blocks to be acted upon (rescued, listed, etc).
      You can define it with the options '--input-position', '--size' and
-     '--domain-logfile'. The rescue domain defaults to the whole input
-     file or logfile.
+     '--domain-mapfile'. The rescue domain defaults to the whole input
+     file or mapfile. If ddrescue can't determine the size of the input
+     file, the rescue domain defaults to the maximum size of a block
+     (at least 2^63 - 1 bytes, or 8 EiB minus 1 byte).
+
+     Ddrescue will never try to read any data outside of the rescue
+     domain except when unaligned direct disc access is requested
+     (*note Direct disc access::). If it does, please, report it as a
+     bug.
 
      The amount of data rescued, number of errors, etc, shown by
      ddrescue may vary or even become zero if you limit the rescue
@@ -159,11 +165,9 @@ Ddrescue is like any other power tool. You need to understand what it
 does, and you need to understand some things about the machines it does
 those things to, in order to use it safely.
 
-   Always use a logfile unless you know you won't need it. Without a
-logfile, ddrescue can't resume a rescue, only reinitiate it.
-
    Never try to rescue a r/w mounted partition. The resulting copy may
-be useless.
+be useless. It is best that the device or partition to be rescued is not
+mounted at all, not even read-only.
 
    Never try to repair a file system on a drive with I/O errors; you
 will probably lose even more data.
@@ -212,8 +216,8 @@ good data.
 process at any point, but be aware that a bad drive can block ddrescue
 for a long time until the kernel gives up):
 
-   1) Optionally read a logfile describing the status of a multi-part or
-previously interrupted rescue. If no logfile is specified or is empty or
+   1) Optionally read a mapfile describing the status of a multi-part or
+previously interrupted rescue. If no mapfile is specified or is empty or
 does not exist, mark all the rescue domain as non-tried.
 
    2) (First phase; Copying) Read the non-tried parts of the input file,
@@ -222,7 +226,7 @@ also beyond slow areas. The skipped areas are tried later in two
 additional passes (before trimming), reversing the direction after each
 pass until all the rescue domain is tried. The third pass is a sweeping
 pass, with skipping disabled. (The purpose is to delimit large errors
-fast, keep the logfile small, and produce good starting points for
+fast, keep the mapfile small, and produce good starting points for
 trimming). Only non-tried areas are read in large blocks. Trimming,
 scraping and retrying are done sector by sector. Each sector is tried at
 most two times; the first in this step as part of a large block read,
@@ -246,47 +250,64 @@ direction is reversed after each pass. Every bad sector is tried only
 once in each pass. Ddrescue can't know if a bad sector is unrecoverable
 or if it will be eventually read after some retries.
 
-   6) Optionally write a logfile for later use.
+   6) Optionally write a mapfile for later use.
 
 
-   The total error size ('errsize') is sum of the sizes of all the
-non-trimmed, non-scraped and bad-sector blocks. It increases during the
-copying phase and may decrease during trimming, scraping and retrying.
-Note that as ddrescue scrapes or retries the failed blocks, the good
-data found may divide them into smaller blocks, decreasing the total
-error size but increasing the number of errors.
+   The total error size (errsize) is the sum of the sizes of all the
+bad-sector blocks. It increases during the trimming and scraping phases,
+and may decrease during the retrying phase. Non-trimmed and non-scraped
+blocks are not considered errors. Note that as ddrescue retries the
+failed blocks, the good data found may divide them into smaller blocks,
+decreasing the total error size but increasing the number of errors.
 
-   The logfile is periodically saved to disc, as well as when ddrescue
+   The 'remaining time' is calculated using the average rate of the
+last 60 seconds and does not take into account that some parts may be
+excluded from the rescue (for example with '--no-trim'), or that some
+areas may be unrecoverable. Therefore it may be very imprecise, may
+vary widely during the rescue, and may show a non-zero value at the end
+of the rescue. In particular it may go down to a few seconds at the end
+of the first pass, just to grow to hours or days in the following
+passes. Such is the nature of ddrescue; the good parts are usually
+recovered fast, while the rest may take a long time.
+
+   The mapfile is periodically saved to disc, as well as when ddrescue
 finishes or is interrupted. So in case of a crash you can resume the
 rescue with little recopying. The interval between saves varies from 30
-seconds to 5 minutes depending on logfile size (larger logfiles are
+seconds to 5 minutes depending on mapfile size (larger mapfiles are
 saved at longer intervals).
 
-   Also, the same logfile can be used for multiple commands that copy
+   Also, the same mapfile can be used for multiple commands that copy
 different areas of the input file, and for multiple recovery attempts
 over different subsets. See this example:
 
 Rescue the most important part of the disc first.
-     ddrescue -i0 -s50MiB /dev/hdc hdimage logfile
-     ddrescue -i0 -s1MiB -d -r3 /dev/hdc hdimage logfile
+     ddrescue -i0 -s50MiB /dev/hdc hdimage mapfile
+     ddrescue -i0 -s1MiB -d -r3 /dev/hdc hdimage mapfile
 
 Then rescue some key disc areas.
-     ddrescue -i30GiB -s10GiB /dev/hdc hdimage logfile
-     ddrescue -i230GiB -s5GiB /dev/hdc hdimage logfile
+     ddrescue -i30GiB -s10GiB /dev/hdc hdimage mapfile
+     ddrescue -i230GiB -s5GiB /dev/hdc hdimage mapfile
 
 Now rescue the rest (does not recopy what is already done).
-     ddrescue /dev/hdc hdimage logfile
-     ddrescue -d -r3 /dev/hdc hdimage logfile
+     ddrescue /dev/hdc hdimage mapfile
+     ddrescue -d -r3 /dev/hdc hdimage mapfile
 
 
-File: ddrescue.info,  Node: Invoking ddrescue,  Next: Logfile structure,  Prev: Algorithm,  Up: Top
+File: ddrescue.info,  Node: Invoking ddrescue,  Next: Mapfile structure,  Prev: Algorithm,  Up: Top
 
 5 Invoking ddrescue
 *******************
 
 The format for running ddrescue is:
 
-     ddrescue [OPTIONS] INFILE OUTFILE [LOGFILE]
+     ddrescue [OPTIONS] INFILE OUTFILE [MAPFILE]
+
+   INFILE and OUTFILE may be files, devices or partitions.  MAPFILE is
+a regular file and must be placed in an existing directory. If MAPFILE
+does not exist, ddrescue will create it.
+
+   Always use a mapfile unless you know you won't need it. Without a
+mapfile, ddrescue can't resume a rescue, only reinitiate it.
 
    ddrescue supports the following options:
 
@@ -340,36 +361,42 @@ The format for running ddrescue is:
 
 '-C'
 '--complete-only'
-     Limit rescue domain to the blocks listed in the LOGFILE. Do not
-     read new data beyond LOGFILE limits. This is useful when reading
+     Limit rescue domain to the blocks listed in the MAPFILE. Do not
+     read new data beyond MAPFILE limits. This is useful when reading
      from devices of undefined size (like raw devices), when the drive
      returns an incorrect size, or when reading from a partial copy. It
      can only be used after a first rescue attempt, possibly limited
-     with the '--size' option, has produced a complete LOGFILE.
+     with the '--size' option, has produced a complete MAPFILE.
 
 '-d'
-'--direct'
-     Use direct disc access to read from INFILE, bypassing the kernel
-     cache. (Open the file with the O_DIRECT flag). Use it only on
-     devices or partitions, not on regular files. Sector size must be
-     correctly set for this to work. Not all systems support this.
+'--idirect'
+     Use direct disc access (*note Direct disc access::) to read from
+     INFILE, bypassing the kernel cache. (Opens the file with the
+     O_DIRECT flag). Sector size must be correctly set for this to
+     work. Not all systems support this.
 
      If your system does not support direct disc access, ddrescue will
      warn you. If the sector size is not correctly set, all reads will
-     result in errors, and no data will be rescued.
+     result in errors and no data will be rescued.
 
 '-D'
-'--synchronous'
-     Use synchronous writes for OUTFILE. (Issue a fsync call after
-     every write). May be useful when forcing the drive to remap its bad
-     sectors.
+'--odirect'
+     Use direct disc access to write to OUTFILE, bypassing the kernel
+     cache. (Opens the file with the O_DIRECT flag). Sector size must be
+     correctly set for this to work. Not all systems support this.
+
+     If your system does not support direct disc access, ddrescue will
+     warn you. If the sector size is not correctly set, a write error
+     will result and no data will be rescued. Some OSs have a bug that
+     prevents them from detecting write errors properly (or at all) on
+     some devices if direct disc access is not used for OUTFILE.
 
 '-e [+]N'
 '--max-errors=[+]N'
      Maximum number of error areas allowed before giving up. Defaults to
      infinity. If N is preceded by '+' the number refers to new error
-     areas found in this run, not counting those already annotated in
-     the LOGFILE.
+     areas found in this run, not counting those already present in the
+     MAPFILE.
 
 '-E BYTES'
 '--max-error-rate=BYTES'
@@ -377,8 +404,8 @@ The format for running ddrescue is:
      second.  Defaults to infinity. The rate being measured is that of
      actually failed reads, so the rescue may finish because of this
      rate being exceeded even if the total error size (errsize) does
-     not change because the areas being tried are already marked as
-     errors.
+     not change because the areas being tried are being marked as
+     non-trimmed or non-scraped, or are already marked as errors.
 
 '-f'
 '--force'
@@ -389,15 +416,16 @@ The format for running ddrescue is:
 
 '-F TYPES'
 '--fill-mode=TYPES'
-     Fill the blocks in OUTFILE specified as any of TYPES in LOGFILE,
+     Fill the blocks in OUTFILE specified as any of TYPES in MAPFILE,
      with data read from INFILE. TYPES contains one or more of the
-     status characters defined in the chapter Logfile structure (*note
-     Logfile structure::). See the chapter Fill mode (*note Fill
-     mode::) for a complete description of the fill mode.
+     status characters defined in the chapter Mapfile structure (*note
+     Mapfile structure::) and an optional 'l' for sector location data.
+     See the chapter Fill mode (*note Fill mode::) for a complete
+     description of the fill mode.
 
 '-G'
 '--generate-mode'
-     Generate an approximate LOGFILE from the INFILE and OUTFILE of the
+     Generate an approximate MAPFILE from the INFILE and OUTFILE of the
      original rescue run. Note that you must keep the original offset
      between '--input-position' and '--output-position' of the original
      rescue run. See the chapter Generate mode (*note Generate mode::)
@@ -405,13 +433,14 @@ The format for running ddrescue is:
 
 '-H FILE'
 '--test-mode=FILE'
-     Builds a map of good/bad blocks using the logfile FILE and uses it
+     Builds a map of good/bad blocks using the mapfile FILE and uses it
      to simulate read errors in INFILE. The blocks marked as finished
      in FILE will be read normally. All other block types will be
      considered read errors without even trying to read them from
      INFILE. This mode is an aid in improving the algorithm of ddrescue
      and is also useful to verify that ddrescue produces accurate
-     results in presence of read errors.
+     results in presence of read errors. Use '-' as FILE to read from
+     standard input.
 
 '-i BYTES'
 '--input-position=BYTES'
@@ -426,11 +455,21 @@ The format for running ddrescue is:
 '-I'
 '--verify-input-size'
      Compare the size of INFILE with the size calculated from the list
-     of blocks contained in the LOGFILE, and exit with status 1 if they
+     of blocks contained in the MAPFILE, and exit with status 1 if they
      differ. This is not enabled by default because the size of some
      devices can't be known in advance and because the size derived
-     from the LOGFILE may be incomplete, for example after doing a
+     from the MAPFILE may be incomplete, for example after doing a
      partial rescue.
+
+'-J'
+'--verify-on-error'
+     After every read error, read again the last good sector found and
+     verify that it returns the same data. Exit with status 2 if the
+     read fails or returns inconsistent data. This option performs one
+     extra read after each error, wearing the drive faster. Use it only
+     on drives that stop responding or return garbage data after
+     finding errors. You may need to power cycle the drive before
+     restarting ddrescue.
 
 '-K [INITIAL][,MAX]'
 '--skip-size=[INITIAL][,MAX]'
@@ -458,20 +497,20 @@ The format for running ddrescue is:
 
 '-L'
 '--loose-domain'
-     Accept an incomplete synthetic (user fabricated) domain logfile or
-     test-mode logfile and fill the gaps in the list of data blocks with
-     non-tried blocks. The blocks in the logfile must be strictly
+     Accept an incomplete synthetic (user fabricated) domain mapfile or
+     test-mode mapfile and fill the gaps in the list of data blocks with
+     non-tried blocks. The blocks in the mapfile must be strictly
      ascending and non-overlapping, but they do not need to be
-     contiguous. This option allows making quick edits to a logfile
+     contiguous. This option allows making quick edits to a mapfile
      without all the size calculations involved in making all data
      blocks contiguous again.
 
 '-m FILE'
-'--domain-logfile=FILE'
+'--domain-mapfile=FILE'
      Restrict the rescue domain to the blocks marked as finished in the
-     logfile FILE. This is useful for merging partially recovered
+     mapfile FILE. This is useful for merging partially recovered
      images of backups, or if the destination drive fails during the
-     rescue.
+     rescue.  Use '-' as FILE to read from standard input.
 
 '-M'
 '--retrim'
@@ -514,7 +553,7 @@ The format for running ddrescue is:
      not fail due to lack of free space on disc. If ddrescue can't
      determine the size to preallocate, you may need to specify it with
      some combination of the '--input-position', '--output-position',
-     '--size', and '--domain-logfile' options.
+     '--size', and '--domain-mapfile' options.
 
 '-P[LINES]'
 '--data-preview[=LINES]'
@@ -545,12 +584,12 @@ The format for running ddrescue is:
 '--size=BYTES'
      Maximum size of the rescue domain, in bytes. It limits the amount
      of input data to be copied. If ddrescue can't determine the size
-     of the input device, you may need to specify it with this option.
+     of the input file, you may need to specify it with this option.
      Note that this option does not specify the size of the resulting
-     OUTFILE.  For example, the following command creates an OUTFILE
-     300 bytes long, but only writes data on the last 200 bytes:
+     OUTFILE. For example, the following command creates an OUTFILE 300
+     bytes long, but only writes data on the last 200 bytes:
 
-          ddrescue -i 100 -s 200 infile outfile logfile
+          ddrescue -i 100 -s 200 infile outfile mapfile
 
 '-S'
 '--sparse'
@@ -611,6 +650,12 @@ The format for running ddrescue is:
      (just enlarged), and '--max-errors=+0' does not make ddrescue to
      exit.
 
+'-y'
+'--synchronous'
+     Use synchronous writes for OUTFILE. (Issue a fsync call after
+     every write). May be useful when forcing the drive to remap its bad
+     sectors.
+
 '-1 FILE'
 '--log-rates=FILE'
      Log rates and error sizes every second in FILE. If FILE already
@@ -649,6 +694,13 @@ The format for running ddrescue is:
      entirely. To run only the given pass(es), specify also '--no-trim'
      and '--no-scrape'.
 
+'--max-read-rate=BYTES'
+     Maximum read rate, in bytes per second. If BYTES is too small, the
+     actual read rate is rounded up to the equivalent of a whole number
+     of cluster reads per second. Use this option to limit the
+     bandwidth used by ddrescue, for example when recovering over a
+     network.
+
 '--pause=INTERVAL'
      Time to wait between passes. Defaults to 0. INTERVAL is formatted
      as in the option '--timeout' above.
@@ -678,23 +730,26 @@ not found, invalid flags, I/O errors, etc), 2 to indicate a corrupt or
 invalid input file, 3 for an internal consistency error (eg, bug) which
 caused ddrescue to panic.
 
-   If ddrescue is interrupted by a signal, it updates the logfile and
-then terminates by raising the signal received.
+   If ddrescue is interrupted by a signal, it updates MAPFILE and then
+terminates by raising the signal received.
 
 
-File: ddrescue.info,  Node: Logfile structure,  Next: Examples,  Prev: Invoking ddrescue,  Up: Top
+File: ddrescue.info,  Node: Mapfile structure,  Next: Emergency save,  Prev: Invoking ddrescue,  Up: Top
 
-6 Logfile structure
+6 Mapfile structure
 *******************
 
-The logfile is a text file easy to read and edit. It is formed by three
-parts, the heading comments, the status line, and the list of data
+NOTE: In versions of ddrescue prior to 1.20 the mapfile was called
+'logfile'. The format is the same; only the name has changed.
+
+   The mapfile is a text file easy to read and edit. It is formed by
+three parts, the heading comments, the status line, and the list of data
 blocks. Any line beginning with '#' is a comment line.
 
    The heading comments contain the version of ddrescue or ddrescuelog
-that created the logfile, the command line used, and the time when the
-program started. If the logfile was created by ddrescue it will also
-contain the current time when the logfile was saved and a copy of the
+that created the mapfile, the command line used, and the time when the
+program started. If the mapfile was created by ddrescue it will also
+contain the current time when the mapfile was saved and a copy of the
 status message from the screen describing the operation being performed
 (copying, trimming, finished, etc). They are intended as information for
 the user.
@@ -711,7 +766,7 @@ Character   Meaning
 '/'         scraping non-scraped blocks
 '-'         retrying bad sectors
 'F'         filling specified blocks
-'G'         generating approximate logfile
+'G'         generating approximate mapfile
 '+'         finished
 
    The blocks in the list of data blocks must be contiguous and
@@ -730,12 +785,12 @@ Character   Meaning
 '-'         failed block bad-sector(s)
 '+'         finished block
 
-And here is an example logfile:
+And here is an example mapfile:
 
-     # Rescue Logfile. Created by GNU ddrescue version 1.19
-     # Command line: ddrescue -d -c18 /dev/fd0 fdimage logfile
-     # Start time:   2014-05-03 09:37:44
-     # Current time: 2014-05-03 09:38:19
+     # Mapfile. Created by GNU ddrescue version 1.20
+     # Command line: ddrescue -d -c18 /dev/fd0 fdimage mapfile
+     # Start time:   2015-07-21 09:37:44
+     # Current time: 2015-07-21 09:38:19
      # Copying non-tried blocks... Pass 1 (forwards)
      # current_pos  current_status
      0x00120000     ?
@@ -749,15 +804,129 @@ And here is an example logfile:
    If you edit the file, you may use decimal, hexadecimal or octal
 values, using the same syntax as integer constants in C++.
 
-   NOTE: Logfiles generated by a version of ddrescue prior to 1.6 lack
-the status line. If you want to use an old logfile with ddrescue 1.6 or
-later, you will have to insert a line like '0 +' at the beginning of
-the logfile.
+
+File: ddrescue.info,  Node: Emergency save,  Next: Optical media,  Prev: Mapfile structure,  Up: Top
+
+7 Saving the mapfile in case of trouble
+***************************************
+
+The mapfile is an essential part of ddrescue's effectiveness. Without a
+mapfile, ddrescue can't resume a rescue, only reinitiate it. Given that
+a difficult rescue may take days to complete, it would be a serious
+drawback if the mapfile were lost because of a solvable problem like a
+lack of space on the device the mapfile is written to.
+
+   In case of trouble writing the mapfile, ddrescue will print a message
+like this:
+
+     Error writing mapfile 'MAPFILE': No space left on device
+     Fix the problem and press ENTER to retry,
+                          or E+ENTER for an emergency save and exit,
+                          or Q+ENTER to abort.
+
+   You may try to fix the problem, for example deleting some files to
+make room for the mapfile, and press <Return> to retry.
+
+   If the problem can't be fixed, you may press <e> followed by
+<Return> to try an emergency save and exit. Ddrescue will try to write
+the mapfile to the file 'ddrescue.map' in the current directory or, if
+this fails, to '$HOME/ddrescue.map'. If the mapfile is written
+succesfully, ddrescue will exit with status 1. Else it will print the
+above message again.
+
+   Or you may press <q> followed by <Return> to quit and exit with
+status 1. In this case the contents of the mapfile will be lost.
 
 
-File: ddrescue.info,  Node: Examples,  Next: Direct disc access,  Prev: Logfile structure,  Up: Top
+File: ddrescue.info,  Node: Optical media,  Next: Examples,  Prev: Emergency save,  Up: Top
 
-7 A small tutorial with examples
+8 Copying CD-ROMs and DVDs
+**************************
+
+Ddrescue may be better than dd for copying recordable CD-ROMs because
+the two lead out sectors at the end of some of them may cause a read
+error that prevents the whole last record from being copied by dd,
+potentially losing data. Also dd may create an image larger than the
+original if the 'sync' conversion and a block size larger than the
+sector size are specified.
+
+   Recordable CD and DVD media keep their data only for a finite time
+(typically for some years). After that time, data loss develops slowly
+with read errors growing from the outer media region towards the inside.
+Just make two (or more) copies of every important CD-ROM/DVD you burn so
+that you can later recover them with ddrescue.
+
+   If you have only one copy of a CD-ROM or DVD that fails when being
+copied, and if you have access to multiple optical media drives, you
+have a better chance of recovering the bad sectors since one drive may
+fail to read a particular sector, but another drive might be able to
+squeeze the data out of it, depending on the laser frequency and the
+sensitivity of the laser-sensor that reads the reflected laser light.
+
+
+Example 1: Rescue a CD-ROM in /dev/cdrom.
+
+     ddrescue -n -b2048 /dev/cdrom cdimage mapfile
+     ddrescue -d -r1 -b2048 /dev/cdrom cdimage mapfile
+       (if errsize is zero, cdimage now contains a complete image of the
+        CD-ROM and you can write it to a blank CD-ROM)
+
+
+Example 2: Rescue a CD-ROM in /dev/cdrom from two copies.
+
+     ddrescue -n -b2048 /dev/cdrom cdimage mapfile
+     ddrescue -d -b2048 /dev/cdrom cdimage mapfile
+       (insert second copy in the CD drive)
+     ddrescue -d -r1 -b2048 /dev/cdrom cdimage mapfile
+       (if errsize is zero, cdimage now contains a complete image of the
+        CD-ROM and you can write it to a blank CD-ROM)
+
+
+Example 3: Rescue a CD-ROM in /dev/cdrom using two CD drives from two
+different computers, writing the image into an USB drive nounted on
+/mnt/mem.
+
+     ddrescue -n -b2048 /dev/cdrom /mnt/mem/cdimage /mnt/mem/mapfile
+     ddrescue -d -r1 -b2048 /dev/cdrom /mnt/mem/cdimage /mnt/mem/mapfile
+       (umount the USB drive and move both USB drive and CD-ROM to second
+        computer)
+     ddrescue -d -r1 -b2048 /dev/cdrom /mnt/mem/cdimage /mnt/mem/mapfile
+       (if errsize is zero, /mnt/mem/cdimage now contains a complete image
+        of the CD-ROM and you can write it to a blank CD-ROM)
+
+
+Example 4: Merge the partially recovered images of 3 identical DVDs
+using their mapfiles as domain mapfiles.
+
+     ddrescue -m mapfile1 dvdimage1 dvdimage mapfile
+     ddrescue -m mapfile2 dvdimage2 dvdimage mapfile
+     ddrescue -m mapfile3 dvdimage3 dvdimage mapfile
+       (if errsize is zero, dvdimage now contains a complete image of the
+        DVD and you can write it to a blank DVD)
+
+
+Example 5: Rescue a lzip compressed backup from two copies on CD-ROM
+with error-checked merging of copies.  (*Note lziprecover manual:
+(lziprecover)Top, for details about lziprecover).
+
+     ddrescue -d -r1 -b2048 /dev/cdrom cdimage1 mapfile1
+     mount -t iso9660 -o loop,ro cdimage1 /mnt/cdimage
+     cp /mnt/cdimage/backup.tar.lz rescued1.tar.lz
+     umount /mnt/cdimage
+       (insert second copy in the CD drive)
+     ddrescue -d -r1 -b2048 /dev/cdrom cdimage2 mapfile2
+     mount -t iso9660 -o loop,ro cdimage2 /mnt/cdimage
+     cp /mnt/cdimage/backup.tar.lz rescued2.tar.lz
+     umount /mnt/cdimage
+     lziprecover -m -v -o backup.tar.lz rescued1.tar.lz rescued2.tar.lz
+       Input files merged successfully.
+     lziprecover -tv backup.tar.lz
+       ok
+
+
+File: ddrescue.info,  Node: Examples,  Next: Direct disc access,  Prev: Optical media,  Up: Top
+
+9 A small tutorial with examples
 ********************************
 
 This tutorial is for those already able to use the dd command. If you
@@ -792,6 +961,8 @@ copy.
    If the damaged drive is not listed in /dev, then you cannot rescue
 it.  At least not with ddrescue.
 
+   *Note Optical media::, for rescue examples of CD-ROMs and DVDs.
+
 
 Example 1: Rescue a whole disc with two ext2 partitions in /dev/hda to
 /dev/hdb.
@@ -799,8 +970,8 @@ Note: you do not need to partition /dev/hdb beforehand, but if the
 partition table on /dev/hda is damaged, you'll need to recreate it
 somehow on /dev/hdb.
 
-     ddrescue -f -n /dev/hda /dev/hdb logfile
-     ddrescue -d -f -r3 /dev/hda /dev/hdb logfile
+     ddrescue -f -n /dev/hda /dev/hdb mapfile
+     ddrescue -d -f -r3 /dev/hda /dev/hdb mapfile
      fdisk /dev/hdb
      e2fsck -v -f /dev/hdb1
      e2fsck -v -f /dev/hdb2
@@ -810,102 +981,61 @@ Example 2: Rescue an ext2 partition in /dev/hda2 to /dev/hdb2.
 Note: you need to create the hdb2 partition with fdisk first. hdb2
 should be of appropriate type and size.
 
-     ddrescue -f -n /dev/hda2 /dev/hdb2 logfile
-     ddrescue -d -f -r3 /dev/hda2 /dev/hdb2 logfile
+     ddrescue -f -n /dev/hda2 /dev/hdb2 mapfile
+     ddrescue -d -f -r3 /dev/hda2 /dev/hdb2 mapfile
      e2fsck -v -f /dev/hdb2
      mount -t ext2 -o ro /dev/hdb2 /mnt
        (read rescued files from /mnt)
 
 
-Example 3: Rescue a CD-ROM in /dev/cdrom.
-
-     ddrescue -n -b2048 /dev/cdrom cdimage logfile
-     ddrescue -d -b2048 /dev/cdrom cdimage logfile
-       (if errsize is zero, cdimage now contains a complete image of the
-        CD-ROM and you can write it to a blank CD-ROM)
-
-
-Example 4: Rescue a CD-ROM in /dev/cdrom from two copies.
-
-     ddrescue -n -b2048 /dev/cdrom cdimage logfile
-     ddrescue -d -b2048 /dev/cdrom cdimage logfile
-       (insert second copy in the CD drive)
-     ddrescue -d -r1 -b2048 /dev/cdrom cdimage logfile
-       (if errsize is zero, cdimage now contains a complete image of the
-        CD-ROM and you can write it to a blank CD-ROM)
-
-
-Example 5: Merge the partially recovered images of 3 identical DVDs
-using their logfiles as domain logfiles.
-
-     ddrescue -m logfile1 dvdimage1 dvdimage logfile
-     ddrescue -m logfile2 dvdimage2 dvdimage logfile
-     ddrescue -m logfile3 dvdimage3 dvdimage logfile
-       (if errsize is zero, dvdimage now contains a complete image of the DVD
-        and you can write it to a blank DVD)
-
-
-Example 6: Rescue a lzip compressed backup from two copies on CD-ROM
-with error-checked merging of copies (*Note lziprecover manual:
-(lziprecover)Top, for details about lziprecover).
-
-     ddrescue -b2048 /dev/cdrom cdimage1 logfile1
-     mount -t iso9660 -o loop,ro cdimage1 /mnt/cdimage
-     cp /mnt/cdimage/backup.tar.lz rescued1.tar.lz
-     umount /mnt/cdimage
-       (insert second copy in the CD drive)
-     ddrescue -b2048 /dev/cdrom cdimage2 logfile2
-     mount -t iso9660 -o loop,ro cdimage2 /mnt/cdimage
-     cp /mnt/cdimage/backup.tar.lz rescued2.tar.lz
-     umount /mnt/cdimage
-     lziprecover -m -v -o backup.tar.lz rescued1.tar.lz rescued2.tar.lz
-
-
-Example 7: While rescuing the whole drive /dev/hda to /dev/hdb, /dev/hda
+Example 3: While rescuing the whole drive /dev/hda to /dev/hdb, /dev/hda
 freezes up at position 12345678.
 
-     ddrescue -f /dev/hda /dev/hdb logfile       <-- /dev/hda freezes here
+     ddrescue -f /dev/hda /dev/hdb mapfile       <-- /dev/hda freezes here
        (restart /dev/hda or reboot computer)
        (restart copy at a safe distance from the troubled sector)
-     ddrescue -f -i 12350000 /dev/hda /dev/hdb logfile
-       (copy backwards down to the troubled sector)
-     ddrescue -f -R /dev/hda /dev/hdb logfile
+     ddrescue -f -i 12350000 /dev/hda /dev/hdb mapfile
+       (then copy backwards down to the troubled sector)
+     ddrescue -f -R /dev/hda /dev/hdb mapfile
 
 
-Example 8: While rescuing the whole drive /dev/hda to /dev/hdb, /dev/hdb
+Example 4: While rescuing the whole drive /dev/hda to /dev/hdb, /dev/hdb
 fails and you have to rescue data to a third drive, /dev/hdc.
 
-     ddrescue -f -n /dev/hda /dev/hdb logfile1     <-- /dev/hdb fails here
-     ddrescue -f -m logfile1 /dev/hdb /dev/hdc logfile2
-     ddrescue -f -n /dev/hda /dev/hdc logfile2
-     ddrescue -d -f -r3 /dev/hda /dev/hdc logfile2
+     ddrescue -f -n /dev/hda /dev/hdb mapfile1     <-- /dev/hdb fails here
+     ddrescue -f -m mapfile1 /dev/hdb /dev/hdc mapfile2
+     ddrescue -f -n /dev/hda /dev/hdc mapfile2
+     ddrescue -d -f -r3 /dev/hda /dev/hdc mapfile2
 
 
-Example 9: While rescuing the whole drive /dev/hda to /dev/hdb, /dev/hda
+Example 5: While rescuing the whole drive /dev/hda to /dev/hdb, /dev/hda
 stops responding and disappears from /dev.
 
-     ddrescue -f -n /dev/hda /dev/hdb logfile      <-- /dev/hda fails here
+     ddrescue -f -n /dev/hda /dev/hdb mapfile      <-- /dev/hda fails here
        (restart /dev/hda or reboot computer as many times as needed)
-     ddrescue -f -n -A /dev/hda /dev/hdb logfile
-     ddrescue -d -f -r3 /dev/hda /dev/hdb logfile
+     ddrescue -f -n -A /dev/hda /dev/hdb mapfile
+     ddrescue -d -f -r3 /dev/hda /dev/hdb mapfile
 
 
 File: ddrescue.info,  Node: Direct disc access,  Next: Fill mode,  Prev: Examples,  Up: Top
 
-8 Direct disc access
-********************
+10 Direct disc access
+*********************
 
-If you notice that the positions and sizes in the logfile are ALWAYS
+If you notice that the positions and sizes in MAPFILE are always
 multiples of the sector size, maybe your kernel is caching the disc
 accesses and grouping them. In this case you may want to use direct disc
-access or a raw device to bypass the kernel cache and rescue more of
-your data.
+access for INFILE, or read from a raw device, to bypass the kernel
+cache and rescue more of your data.
 
    NOTE! Sector size must be correctly set with the '--sector-size'
-option for this to work. Only whole sectors can be read; both
-'--input-position' and '--size' must be a multiple of sector size.
+option for direct disc access to work.
 
-   Try the '--direct' option first. If direct disc access is not
+   NOTE: Direct disc access can copy arbitrary domains by reading whole
+sectors and then writing only the requested part. This is the only case
+where ddrescue will try to read data outside of the rescue domain.
+
+   Try the '--idirect' option first. If direct disc access is not
 available in your system, try raw devices. Read your system
 documentation to find how to bind a raw device to a regular block
 device. Some OSs provide raw access through special device names, like
@@ -927,8 +1057,8 @@ to recover the good sectors inside the failed blocks.
 
 Example 1: using direct disc access.
 
-     ddrescue -f -n /dev/hdb1 /dev/hdc1 logfile
-     ddrescue -d -f -r3 /dev/hdb1 /dev/hdc1 logfile
+     ddrescue -f -n /dev/hdb1 /dev/hdc1 mapfile
+     ddrescue -d -f -r3 /dev/hdb1 /dev/hdc1 mapfile
      e2fsck -v -f /dev/hdc1
      mount -t ext2 -o ro /dev/hdc1 /mnt
 
@@ -936,8 +1066,8 @@ Example 1: using direct disc access.
 Example 2: using a raw device.
 
      raw /dev/raw/raw1 /dev/hdb1
-     ddrescue -f -n /dev/hdb1 /dev/hdc1 logfile
-     ddrescue -C -f -r3 /dev/raw/raw1 /dev/hdc1 logfile
+     ddrescue -f -n /dev/hdb1 /dev/hdc1 mapfile
+     ddrescue -C -f -r3 /dev/raw/raw1 /dev/hdc1 mapfile
      raw /dev/raw/raw1 0 0
      e2fsck -v -f /dev/hdc1
      mount -t ext2 -o ro /dev/hdc1 /mnt
@@ -945,40 +1075,44 @@ Example 2: using a raw device.
 
 File: ddrescue.info,  Node: Fill mode,  Next: Generate mode,  Prev: Direct disc access,  Up: Top
 
-9 Fill mode
-***********
+11 Fill mode
+************
 
 When ddrescue is invoked with the '--fill-mode' option it operates in
 "fill mode", which is different from the default "rescue mode". That
 is, if you use the '--fill-mode' option, ddrescue does not rescue
-anything. It only fills with data read from the input file the blocks of
-the output file whose status character from the logfile coincides with
-one of the type characters specified as argument to the '--fill-mode'
-option.
+anything. It only fills with data read from INFILE the blocks of
+OUTFILE whose status character from MAPFILE coincides with one of the
+type characters specified as argument to the '--fill-mode' option.
 
-   In fill mode the input file may have any size. If it is too small,
-the data will be duplicated as many times as necessary to fill the input
-buffer. If it is too big, only the data needed to fill the input buffer
-will be read. Then the same data will be written to every cluster or
-sector to be filled.
+   If the argument of the '--fill-mode' option contains an 'l',
+ddrescue will write location data (position, sector number and status)
+into each sector filled. With bad sectors filled in this way, it should
+be possible to retry the recovery of important files, as location of the
+error is known by looking into the unfinished copy of the file.
 
-   Note that in fill mode the input file is always read from position
-0. If you specify a '--input-position', it refers to the original input
-file from which the logfile was built, and is only used to calculate the
-offset between input and output positions.
+   In fill mode INFILE may have any size. If it is too small, the data
+will be duplicated as many times as necessary to fill the input buffer.
+If it is too big, only the data needed to fill the input buffer will be
+read. Then the same data will be written to every cluster or sector to
+be filled.
 
-   Note also that when filling the input file of the original rescue run
-you should set '--input-position' and '--output-position' to identical
-values, whereas when filling the output file of the original rescue run
-you should keep the original offset between '--input-position' and
-'--output-position'.
+   Note that in fill mode INFILE is always read from position 0. If you
+specify a '--input-position', it refers to the original INFILE from
+which MAPFILE was built, and is only used to calculate the offset
+between input and output positions.
+
+   Note also that when filling the INFILE of the original rescue run
+you should not set '--output-position', whereas when filling the
+OUTFILE of the original rescue run you should keep the original offset
+between '--input-position' and '--output-position'.
 
    The '--fill-mode' option implies the '--complete-only' option.
 
-   In fill mode the logfile is updated to allow resumability when
-interrupted or in case of a crash, but as nothing is being rescued the
-logfile is not destroyed. The status line is the only part of the
-logfile that is modified.
+   In fill mode MAPFILE is updated to allow resumability when
+interrupted or in case of a crash, but as nothing is being rescued
+MAPFILE is not destroyed. The status line is the only part of MAPFILE
+that is modified.
 
 
 The fill mode has a number of uses. See the following examples:
@@ -989,7 +1123,7 @@ all blocks marked as '-' (bad-sector) with copies of the string
 'BAD SECTOR ':
 
      printf "BAD SECTOR " > tmpfile
-     ddrescue --fill-mode=- tmpfile outfile logfile
+     ddrescue --fill-mode=- tmpfile outfile mapfile
 
 Example 2: Wipe only the good sectors, leaving the bad sectors alone.
 This way, the drive will still test bad (i.e., with unreadable sectors).
@@ -997,7 +1131,7 @@ This is the fastest way of wiping a failing drive, and is specially
 useful when sending the drive back to the manufacturer for warranty
 replacement.
 
-     ddrescue --fill-mode=+ --force /dev/zero bad_drive logfile
+     ddrescue --fill-mode=+ --force /dev/zero bad_drive mapfile
 
 Example 3: Force the drive to remap the bad sectors, making it usable
 again. If the drive has only a few bad sectors, and they are not caused
@@ -1005,7 +1139,7 @@ by drive age, you can probably just rewrite those sectors, and the drive
 will reallocate them automatically to new "spare" sectors that it keeps
 for just this purpose. WARNING! This may not work on your drive.
 
-     ddrescue --fill-mode=- --force --synchronous /dev/zero bad_drive logfile
+     ddrescue --fill-mode=- -f --synchronous /dev/zero bad_drive mapfile
 
 
 Fill mode can also help you to figure out, independently of the file
@@ -1013,48 +1147,60 @@ system used, what files are partially or entirely in the bad areas of
 the disc. Just follow these steps:
 
    1) Copy the damaged drive with ddrescue until finished. Do not use
-sparse writes. This yields a logfile with only finished ('+') and
+sparse writes. This yields a mapfile with only finished ('+') and
 bad-sector ('-') blocks.
 
    2) Fill the bad-sector blocks of the copied drive or image file with
-a string not present in any file, for example "DEADBEEF".
+a string not present in any file, for example "DEADBEEF". Use
+'--fill-mode=l-' if you want location data.
 
-   3) Mount the copied drive (or the image file, via loopback device).
+   3) Mount the copied drive (or the image file, via loopback device)
+read-only.
 
    4) Grep for the fill string in all the files. Those files containing
 the string reside (at least partially) in damaged disc areas. Note that
 if all the damaged areas are in unused space, grep will not find the
 string in any file, which means that no files are damaged.
 
-   5) Unmount the copied drive or image file.
+   5) Take note of the location data of any important files that you
+want to retry.
 
-   6) Optionally fill the bad-sector blocks of the copied drive or image
+   6) Unmount the copied drive or image file.
+
+   7) Retry the sectors belonging to the important files until they are
+rescued or until it is clear that they can't be rescued.
+
+   8) Optionally fill the bad-sector blocks of the copied drive or image
 file with zeros to restore the disc image.
 
 Example 4: Figure out what files are in the bad areas of the disc.
 
-     ddrescue -b2048 /dev/cdrom cdimage logfile
+     ddrescue -b2048 /dev/cdrom cdimage mapfile
      printf "DEADBEEF" > tmpfile
-     ddrescue --fill-mode=- tmpfile cdimage logfile
+     ddrescue --fill-mode=l- tmpfile cdimage mapfile
      rm tmpfile
      mount -t iso9660 -o loop,ro cdimage /mnt/cdimage
      find /mnt/cdimage -type f -exec grep -l "DEADBEEF" '{}' ';'
+       (note that my_thesis.txt has a bad sector at pos 0x12345000)
      umount /mnt/cdimage
-     ddrescue --fill-mode=- /dev/zero cdimage logfile
+     ddrescue -b2048 -i0x12345000 -s2048 -dr9 /dev/cdrom cdimage mapfile
+     ddrescue --fill-mode=- /dev/zero cdimage mapfile
+     mount -t iso9660 -o loop,ro cdimage /mnt/cdimage
+     cp -a /mnt/cdimage/my_thesis.txt /safe/place/my_thesis.txt
 
 
 File: ddrescue.info,  Node: Generate mode,  Next: Ddrescuelog,  Prev: Fill mode,  Up: Top
 
-10 Generate mode
+12 Generate mode
 ****************
 
-NOTE: When ddrescue is invoked with the '--generate-mode' option it
-operates in "generate mode", which is different from the default "rescue
-mode". That is, if you use the '--generate-mode' option, ddrescue does
-not rescue anything. It only tries to generate a logfile for later use.
+When ddrescue is invoked with the '--generate-mode' option it operates
+in "generate mode", which is different from the default "rescue mode".
+That is, if you use the '--generate-mode' option, ddrescue does not
+rescue anything. It only tries to generate a MAPFILE for later use.
 
-   So you didn't read the tutorial and started ddrescue without a
-logfile.  Now, two days later, your computer crashed and you can't know
+   So you didn't read the manual and started ddrescue without a
+MAPFILE. Now, two days later, your computer crashed and you can't know
 how much data ddrescue managed to save. And even worse, you can't
 resume the rescue; you have to restart it from the very beginning.
 
@@ -1064,14 +1210,14 @@ you can't use a copy made by dd unless it was invoked with the 'sync'
 conversion argument.
 
    Don't despair (yet). Ddrescue can in some cases generate an
-approximate logfile, from the input file and the (partial) copy, that
-is almost as good as an exact logfile. It makes this by simply assuming
-that sectors containing all zeros were not rescued.
+approximate MAPFILE, from INFILE and the (partial) copy in OUTFILE,
+that is almost as good as an exact MAPFILE. It makes this by simply
+assuming that sectors containing all zeros were not rescued.
 
    However, if the destination of the copy was a drive or a partition,
 (or an existing regular file and truncation was not requested), most
 probably you will need to restart ddrescue from the very beginning.
-(This time with a logfile, of course). The reason is that old data may
+(This time with a MAPFILE, of course). The reason is that old data may
 be present in the drive that have not been overwritten yet, and may be
 thus non-tried but non-zero.
 
@@ -1080,8 +1226,8 @@ thus non-tried but non-zero.
      or
      dd if=infile of=outfile conv=noerror,sync
 
-   then you can generate an approximate logfile with this command:
-     ddrescue --generate-mode infile outfile logfile
+   then you can generate an approximate mapfile with this command:
+     ddrescue --generate-mode infile outfile mapfile
 
 Note that you must keep the original offset between '--input-position'
 and '--output-position' of the original rescue run.
@@ -1089,16 +1235,16 @@ and '--output-position' of the original rescue run.
 
 File: ddrescue.info,  Node: Ddrescuelog,  Next: Invoking ddrescuelog,  Prev: Generate mode,  Up: Top
 
-11 Ddrescuelog
+13 Ddrescuelog
 **************
 
-Ddrescuelog is a tool that manipulates ddrescue logfiles, shows logfile
-contents, converts logfiles to/from other formats, compares logfiles,
-tests rescue status, and can delete a logfile if the rescue is done.
+Ddrescuelog is a tool that manipulates ddrescue mapfiles, shows mapfile
+contents, converts mapfiles to/from other formats, compares mapfiles,
+tests rescue status, and can delete a mapfile if the rescue is done.
 Ddrescuelog operations can be restricted to one or several parts of the
-logfile if the domain setting options are used.
+mapfile if the domain setting options are used.
 
-   When performing logic operations (AND, OR, XOR) on logfiles of
+   When performing logic operations (AND, OR, XOR) on mapfiles of
 different extension, only the blocks present in both files are
 processed.
 
@@ -1106,11 +1252,11 @@ processed.
 combination with other tools.
 
 
-Example 1: Delete the logfile if the rescue is finished (all data is
-recovered without errors left).
+Example 1: Delete the mapfile if the rescue is finished (all data have
+been recovered without errors left).
 
-     ddrescue -f /dev/hda /dev/hdb logfile
-     ddrescuelog -d logfile
+     ddrescue -f /dev/hda /dev/hdb mapfile
+     ddrescuelog -d mapfile
 
 
 Example 2: Rescue two ext2 partitions in /dev/hda to /dev/hdb and
@@ -1118,11 +1264,11 @@ repair the file systems using badblock lists generated with
 ddrescuelog. File system block size is 4096.
 Note: you do need to partition /dev/hdb beforehand.
 
-     fdisk /dev/hdb                                <-- partition /deb/hdb
-     ddrescue -f /dev/hda1 /dev/hdb1 logfile1
-     ddrescue -f /dev/hda2 /dev/hdb2 logfile2
-     ddrescuelog -l- -b4096 logfile1 > badblocks1
-     ddrescuelog -l- -b4096 logfile2 > badblocks2
+     fdisk /dev/hdb                                 <-- partition /deb/hdb
+     ddrescue -f /dev/hda1 /dev/hdb1 mapfile1
+     ddrescue -f /dev/hda2 /dev/hdb2 mapfile2
+     ddrescuelog -l- -b4096 mapfile1 > badblocks1
+     ddrescuelog -l- -b4096 mapfile2 > badblocks2
      e2fsck -v -f -L badblocks1 /dev/hdb1
      e2fsck -v -f -L badblocks2 /dev/hdb2
 
@@ -1136,22 +1282,25 @@ Note: you do not need to partition /dev/hdb beforehand, but if the
 partition table on /dev/hda is damaged, you'll need to recreate it
 somehow on /dev/hdb.
 
-     ddrescue -f /dev/hda /dev/hdb logfile
+     ddrescue -f /dev/hda /dev/hdb mapfile
      fdisk /dev/hdb                                <-- get partition sizes
-     ddrescuelog -l- -b512 -i63b -o0 -s9767457b -b4096 logfile > badblocks1
-     ddrescuelog -l- -b512 -i9767520b -o0 -s128520b -b4096 logfile > badblocks2
+     ddrescuelog -l- -b512 -i63s -o0 -s767457s -b4096 mapfile > badblocks1
+     ddrescuelog -l- -b512 -i767520s -o0 -s96520s -b4096 mapfile > badblocks2
      e2fsck -v -f -L badblocks1 /dev/hdb1
      e2fsck -v -f -L badblocks2 /dev/hdb2
 
 
 File: ddrescue.info,  Node: Invoking ddrescuelog,  Next: Problems,  Prev: Ddrescuelog,  Up: Top
 
-12 Invoking ddrescuelog
+14 Invoking ddrescuelog
 ***********************
 
 The format for running ddrescuelog is:
 
-     ddrescuelog [OPTIONS] LOGFILE
+     ddrescuelog [OPTIONS] MAPFILE
+
+   Use '-' as MAPFILE to read the mapfile from standard input or to
+write the mapfile created by '--create-mapfile' to standard output.
 
    Ddrescuelog supports the following options:
 
@@ -1168,10 +1317,10 @@ The format for running ddrescuelog is:
 '--change-types=OLD_TYPES,NEW_TYPES'
      Change the status of every block in the rescue domain from one
      type in OLD_TYPES to the corresponding type in NEW_TYPES, much like
-     the 'tr' command does, and write the resulting logfile to standard
+     the 'tr' command does, and write the resulting mapfile to standard
      output. OLD_TYPES and NEW_TYPES are strings of block status
-     characters as defined in the chapter Logfile structure (*note
-     Logfile structure::). Blocks whose status is not in OLD_TYPES are
+     characters as defined in the chapter Mapfile structure (*note
+     Mapfile structure::). Blocks whose status is not in OLD_TYPES are
      left unchanged. If NEW_TYPES is shorter than OLD_TYPES the last
      type of NEW_TYPES is repeated as many times as necessary.
 
@@ -1188,54 +1337,54 @@ The format for running ddrescuelog is:
      *note Invoking ddrescue::).
 
 '-c[TYPE1TYPE2]'
-'--create-logfile[=TYPE1TYPE2]'
-     Create a logfile from a list of block numbers read from standard
-     input.  Only blocks included in the rescue domain will be added to
-     LOGFILE.
+'--create-mapfile[=TYPE1TYPE2]'
+     Create a MAPFILE from a list of block numbers read from standard
+     input. Only blocks included in the rescue domain will be added to
+     MAPFILE.
 
      TYPE1 and TYPE2 are block status characters as defined in the
-     chapter Logfile structure (*note Logfile structure::). TYPE1 sets
+     chapter Mapfile structure (*note Mapfile structure::). TYPE1 sets
      the type for blocks included in the list, while TYPE2 sets the
-     type for the rest of the logfile. If not specified, TYPE1 defaults
-     to '+' and TYPE2 defaults to '-'.
+     type for the rest of MAPFILE. If not specified, TYPE1 defaults to
+     '+' and TYPE2 defaults to '-'.
 
 '-C[TYPE]'
-'--complete-logfile[=TYPE]'
-     Complete a synthetic (user fabricated) LOGFILE by filling the gaps
-     with blocks of type TYPE, and write the completed logfile to
+'--complete-mapfile[=TYPE]'
+     Complete a synthetic (user fabricated) MAPFILE by filling the gaps
+     with blocks of type TYPE, and write the completed mapfile to
      standard output. TYPE is one of the block status characters
-     defined in the chapter Logfile structure (*note Logfile
+     defined in the chapter Mapfile structure (*note Mapfile
      structure::). If TYPE is not specified, the gaps are filled with
-     non-tried blocks.  All gaps in the logfile are filled. Domain
-     options are ignored.
+     non-tried blocks.  All gaps in MAPFILE are filled. Domain options
+     are ignored.
 
 '-d'
 '--delete-if-done'
-     Delete the given LOGFILE if all the blocks in the rescue domain
-     have been successfuly recovered. The exit status is 0 if LOGFILE
+     Delete the given MAPFILE if all the blocks in the rescue domain
+     have been successfully recovered. The exit status is 0 if MAPFILE
      could be deleted, 1 otherwise.
 
 '-D'
 '--done-status'
-     Test if all the blocks in the rescue domain have been successfuly
+     Test if all the blocks in the rescue domain have been successfully
      recovered. The exit status is 0 if all tested blocks are finished,
      1 otherwise.
 
 '-f'
 '--force'
-     Force overwrite of LOGFILE.
+     Force overwrite of MAPFILE.
 
 '-i BYTES'
 '--input-position=BYTES'
      Starting position of the rescue domain, in bytes. Defaults to 0. It
-     refers to a position in the original input file.
+     refers to a position in the original INFILE.
 
 '-l TYPES'
 '--list-blocks=TYPES'
      Print on standard output the block numbers of the blocks specified
-     as any of TYPES in LOGFILE and included in the rescue domain.
+     as any of TYPES in MAPFILE and included in the rescue domain.
      TYPES contains one or more of the block status characters defined
-     in the chapter Logfile structure (*note Logfile structure::).
+     in the chapter Mapfile structure (*note Mapfile structure::).
 
      The list format is one block number per line in decimal, like the
      output of the badblocks program, so that it can be used as input
@@ -1243,45 +1392,45 @@ The format for running ddrescuelog is:
 
 '-L'
 '--loose-domain'
-     Accept an incomplete synthetic (user fabricated) domain logfile or
-     compare-as-domain logfile and fill the gaps in the list of data
-     blocks with non-tried blocks. The blocks in the logfile must be
+     Accept an incomplete synthetic (user fabricated) domain mapfile or
+     compare-as-domain mapfile and fill the gaps in the list of data
+     blocks with non-tried blocks. The blocks in the mapfile must be
      strictly ascending and non-overlapping, but they do not need to be
-     contiguous.  This option allows making quick edits to a logfile
+     contiguous.  This option allows making quick edits to a mapfile
      without all the size calculations involved in making all data
      blocks contiguous again.
 
 '-m FILE'
-'--domain-logfile=FILE'
+'--domain-mapfile=FILE'
      Restrict the rescue domain to the blocks marked as finished in the
-     logfile FILE.
+     mapfile FILE. Use '-' as FILE to read from standard input.
 
 '-n'
-'--invert-logfile'
-     Invert the types of the blocks in LOGFILE which are included in
-     the rescue domain, and write the resulting logfile to standard
+'--invert-mapfile'
+     Invert the types of the blocks in MAPFILE which are included in
+     the rescue domain, and write the resulting mapfile to standard
      output.  Finished blocks ('+') are changed to bad-sector ('-'), all
-     other types are changed to finished. '--invert-logfile' is
+     other types are changed to finished. '--invert-mapfile' is
      equivalent to '--change-types=?*/-+,++++-'
 
 '-o BYTES'
 '--output-position=BYTES'
-     Starting position of the image of the rescue domain in the output
-     file, in bytes. Is used by the '--list-blocks' option. Defaults to
-     '--input-position'.
+     Starting position of the image of the rescue domain in the original
+     OUTFILE, in bytes. Is used by the '--list-blocks' option.
+     Defaults to '--input-position'.
 
 '-p FILE'
-'--compare-logfile=FILE'
+'--compare-mapfile=FILE'
      Compare the types of the blocks included in the rescue domain. The
-     exit status is 0 if all tested blocks are the same in both FILE and
-     LOGFILE, 1 otherwise.
+     exit status is 0 if all the blocks tested are the same in both
+     FILE and MAPFILE, 1 otherwise.
 
 '-P FILE'
 '--compare-as-domain=FILE'
      Compare only the blocks marked as finished in the rescue domain.
-     The exit status is 0 if all tested blocks are the same in both FILE
-     and LOGFILE, 1 otherwise. Two files comparing equal with this
-     option are equivalent when used as domain logfiles.
+     The exit status is 0 if all the blocks tested are the same in both
+     FILE and MAPFILE, 1 otherwise. Two files comparing equal with this
+     option are equivalent when used as domain mapfiles.
 
 '-q'
 '--quiet'
@@ -1290,40 +1439,41 @@ The format for running ddrescuelog is:
 '-s BYTES'
 '--size=BYTES'
      Maximum size of the rescue domain, in bytes. It refers to a size
-     in the original input file.
+     in the original INFILE.
 
 '-t'
 '--show-status'
-     Print a summary of LOGFILE contents on the standard output. The
-     summary can be restricted to one or several parts of LOGFILE if
-     the domain setting options are used.
+     Print a summary of the contents of each MAPFILE to the standard
+     output. This option allows more than one MAPFILE. If the domain
+     setting options are used, the summary can be restricted to one or
+     several parts of MAPFILE.
 
 '-v'
 '--verbose'
      Verbose mode. Further -v's (up to 4) increase the verbosity level.
 
 '-x FILE'
-'--xor-logfile=FILE'
+'--xor-mapfile=FILE'
      Perform a logical XOR (exclusive OR) operation between the finished
-     blocks in FILE and those in LOGFILE, and write the resulting
-     logfile to standard output. In other words, in the resulting
-     logfile a block is only shown as finished if it was finished in
-     either of the two input logfiles but not in both.
+     blocks in FILE and those in MAPFILE, and write the resulting
+     mapfile to standard output. In other words, in the resulting
+     mapfile a block is only shown as finished if it was finished in
+     either of the two input mapfiles but not in both.
 
 '-y FILE'
-'--and-logfile=FILE'
+'--and-mapfile=FILE'
      Perform a logical AND operation between the finished blocks in
-     FILE and those in LOGFILE, and write the resulting logfile to
-     standard output. In other words, in the resulting logfile a block
+     FILE and those in MAPFILE, and write the resulting mapfile to
+     standard output. In other words, in the resulting mapfile a block
      is only shown as finished if it was finished in both input
-     logfiles.
+     mapfiles.
 
 '-z FILE'
-'--or-logfile=FILE'
+'--or-mapfile=FILE'
      Perform a logical OR operation between the finished blocks in FILE
-     and those in LOGFILE, and write the resulting logfile to standard
-     output. In other words, in the resulting logfile a block is shown
-     as finished if it was finished in either of the two input logfiles.
+     and those in MAPFILE, and write the resulting mapfile to standard
+     output. In other words, in the resulting mapfile a block is shown
+     as finished if it was finished in either of the two input mapfiles.
 
 
    Exit status: 0 for a normal exit, 1 for environmental problems (file
@@ -1334,7 +1484,7 @@ caused ddrescuelog to panic.
 
 File: ddrescue.info,  Node: Problems,  Next: Concept index,  Prev: Invoking ddrescuelog,  Up: Top
 
-13 Reporting bugs
+15 Reporting bugs
 *****************
 
 There are probably bugs in ddrescue. There are certainly errors and
@@ -1360,6 +1510,7 @@ Concept index
 * bugs:                                  Problems.              (line 6)
 * ddrescuelog:                           Ddrescuelog.           (line 6)
 * direct disc access:                    Direct disc access.    (line 6)
+* emergency save:                        Emergency save.        (line 6)
 * examples:                              Examples.              (line 6)
 * fill Mode:                             Fill mode.             (line 6)
 * generate Mode:                         Generate mode.         (line 6)
@@ -1367,7 +1518,8 @@ Concept index
 * introduction:                          Introduction.          (line 6)
 * invoking ddrescue:                     Invoking ddrescue.     (line 6)
 * invoking ddrescuelog:                  Invoking ddrescuelog.  (line 6)
-* logfile structure:                     Logfile structure.     (line 6)
+* mapfile structure:                     Mapfile structure.     (line 6)
+* optical media:                         Optical media.         (line 6)
 * options:                               Invoking ddrescue.     (line 6)
 * raw devices:                           Direct disc access.    (line 6)
 * usage:                                 Invoking ddrescue.     (line 6)
@@ -1378,21 +1530,23 @@ Concept index
 
 Tag Table:
 Node: Top201
-Node: Introduction1320
-Node: Basic concepts4285
-Node: Important advice6162
-Node: Algorithm7271
-Node: Invoking ddrescue12066
-Node: Logfile structure28848
-Node: Examples31667
-Ref: lziprecover-example35210
-Node: Direct disc access37050
-Node: Fill mode39127
-Node: Generate mode43408
-Node: Ddrescuelog45355
-Node: Invoking ddrescuelog47645
-Node: Problems54620
-Node: Concept index55177
+Node: Introduction1438
+Node: Basic concepts4158
+Node: Important advice6441
+Node: Algorithm7516
+Node: Invoking ddrescue12945
+Node: Mapfile structure31557
+Node: Emergency save34282
+Node: Optical media35738
+Ref: lziprecover-example38671
+Node: Examples39435
+Node: Direct disc access43164
+Node: Fill mode45385
+Node: Generate mode50438
+Node: Ddrescuelog52379
+Node: Invoking ddrescuelog54674
+Node: Problems61889
+Node: Concept index62446
 
 End Tag Table
 

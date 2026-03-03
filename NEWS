@@ -1,45 +1,52 @@
-Changes in version 1.19:
+Changes in version 1.20:
 
-A race condition at start of run with "--timeout=0" has been fixed.
+"logfile" has been renamed to "mapfile" everywhere, even in long option
+names. ("--domain-logfile" is now "--domain-mapfile", etc).
 
-The new option "-P, --data-preview", which makes ddrescue show a few
-lines of the latest data read, has been added.
+The short name of option "--synchronous" has been changed to "-y".
 
-The new option "-u, --unidirectional", which runs all passes in the same
-direction (forwards or backwards), has been added.
+The long name of option "-d" has been changed to "--idirect".
 
-The new option "-X, --exit-on-error", which makes ddrescue exit after
-the first read error is encountered during the copying phase, has been
-added.
+The new option "-D, --odirect" has been added. This introduces a subtle
+backward incompatibility because "-D" was the short name of option
+"--synchronous".
 
-The new option "--ask", which asks for confirmation before starting the
-copy, has been added.
+The new option "-J, --verify-on-error" has been added. It verifies,
+after each read error, that the input device is still returning
+consistent data.
 
-The new option "--cpass", which selects what passes to run during the
-copying phase, has been added.
+The new option "--max-read-rate" has been added.
 
-The new option "--pause", which inserts a pause between passes, has been
-added.
+"direct disc access" now can copy arbitrary domains by reading whole
+sectors and writing only the requested part.
 
-The option "-l, --logfile-size" is no more needed and has been removed.
+Accounting change; only bad_sector blocks are now included in "errsize".
 
-Ddrescue now skips on the first error during the copying phase.
+The estimated remaining rescue time is now shown on the screen.
 
-Trimming is now done in one pass and may be run in reverse.
+Times are now shown in days, hours, minutes and seconds, instead of as a
+fraction of the appropriate unit.
 
-The splitting phase has been replaced by a "scraping" phase that scrapes
-together the data not recovered by the copying or trimming phases.
-Scraping reads each non-scraped block forwards, one sector at a time.
+Fill mode has been extended to write location data into each sector.
 
-The long name of option "-n" has been changed to "--no-scrape".
+An emergency save of the mapfile has been added. It can be activated in
+case of ddrescue having trouble writing the mapfile.
 
-During the retrying phase the direction is now reversed after each pass.
-Use "--unidirectional" to override.
+Device name is now shown with "--ask" or "-vv" on Haiku.
 
-Model and serial number of ATA devices are shown with "--ask" or "-vv"
-on Linux.
+Read-only mapfiles, like domain mapfiles or input mapfiles for
+ddrescuelog, can now be read from standard input if a hyphen '-' is used
+as mapfile name.
 
-The configure script now accepts the option "--enable-linux" to enable
-the compilation of linux-specific code.
+Ddrescuelog can now show the status of more than one mapfile.
 
-The license has been changed to GPL version 2 or later.
+"ddrescuelog --create-mapfile -" now writes the mapfile to standard output.
+
+The new chapter "Optical media" has been added to the manual.
+
+The configure option "--enable-linux" has been renamed to
+"--enable-non-posix".
+
+The targets "install-compress", "install-strip-compress",
+"install-info-compress" and "install-man-compress" have been added to
+the Makefile.

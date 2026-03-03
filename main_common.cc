@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2014 Antonio Diaz Diaz.
+    Copyright (C) 2004-2015 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
 
 namespace {
 
-const char * const program_year = "2014";
+const char * const program_year = "2015";
 std::string command_line;
 
 
@@ -53,10 +53,6 @@ long long getnum( const char * const ptr, const int hardbs,
       {
       case ' ': break;
       case ',': if( !comma ) { bad_multiplier = true; } break;
-      case 'b':
-      case 's': if( hardbs > 0 ) { factor = hardbs; exponent = 1; }
-                else bad_multiplier = true;
-                break;
       case 'Y': exponent = 8; break;
       case 'Z': exponent = 7; break;
       case 'E': exponent = 6; break;
@@ -67,6 +63,9 @@ long long getnum( const char * const ptr, const int hardbs,
       case 'K': if( factor == 1024 ) exponent = 1; else bad_multiplier = true;
                 break;
       case 'k': if( factor == 1000 ) exponent = 1; else bad_multiplier = true;
+                break;
+      case 's': if( hardbs > 0 ) { factor = hardbs; exponent = 1; }
+                else bad_multiplier = true;
                 break;
       default: bad_multiplier = true;
       }
@@ -91,12 +90,19 @@ long long getnum( const char * const ptr, const int hardbs,
   }
 
 
-void check_types( const std::string & types, const char * const opt_name )
+bool check_types( std::string & types, const char * const opt_name,
+                  const bool allow_l = false )
   {
   bool error = false;
-  for( unsigned i = 0; i < types.size(); ++i )
+  bool write_location_data = false;
+  for( int i = types.size(); i > 0; )
+    {
+    if( types[--i] == 'l' )
+      { if( !allow_l ) { error = true; break; }
+        write_location_data = true; types.erase( i, 1 ); continue; }
     if( !Sblock::isstatus( types[i] ) )
       { error = true; break; }
+    }
   if( !types.size() || error )
     {
     char buf[80];
@@ -104,6 +110,7 @@ void check_types( const std::string & types, const char * const opt_name )
     show_error( buf, 0, true );
     std::exit( 1 );
     }
+  return write_location_data;
   }
 
 
@@ -156,7 +163,7 @@ void show_error( const char * const msg, const int errcode, const bool help )
       std::fprintf( stderr, "%s: %s", program_name, msg );
       if( errcode > 0 )
         std::fprintf( stderr, ": %s", std::strerror( errcode ) );
-      std::fprintf( stderr, "\n" );
+      std::fputc( '\n', stderr );
       }
     if( help )
       std::fprintf( stderr, "Try '%s --help' for more information.\n",
@@ -173,23 +180,24 @@ void internal_error( const char * const msg )
   }
 
 
-int empty_domain() { show_error( "Empty domain." ); return 0; }
+int empty_domain()
+  { show_error( "Nothing to do; domain is empty." ); return 0; }
 
 
-int not_readable( const char * const logname )
+int not_readable( const char * const mapname )
   {
   char buf[80];
   snprintf( buf, sizeof buf,
-            "Logfile '%s' does not exist or is not readable.", logname );
+            "Mapfile '%s' does not exist or is not readable.", mapname );
   show_error( buf );
   return 1;
   }
 
 
-int not_writable( const char * const logname )
+int not_writable( const char * const mapname )
   {
   char buf[80];
-  snprintf( buf, sizeof buf, "Logfile '%s' is not writable.", logname );
+  snprintf( buf, sizeof buf, "Mapfile '%s' is not writable.", mapname );
   show_error( buf );
   return 1;
   }
@@ -204,15 +212,15 @@ long initial_time()
   }
 
 
-bool write_logfile_header( FILE * const f, const char * const logtype )
+bool write_file_header( FILE * const f, const char * const filetype )
   {
   static std::string timestamp;
 
   if( timestamp.empty() ) timestamp = get_timestamp( initial_time() );
-  return ( std::fprintf( f, "# %s Logfile. Created by %s version %s\n"
+  return ( std::fprintf( f, "# %s. Created by %s version %s\n"
                             "# Command line: %s\n"
                             "# Start time:   %s\n",
-           logtype, Program_name, PROGVERSION, command_line.c_str(),
+           filetype, Program_name, PROGVERSION, command_line.c_str(),
            timestamp.c_str() ) >= 0 );
   }
 
