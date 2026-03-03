@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2015 Antonio Diaz Diaz.
+    Copyright (C) 2004-2016 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -57,7 +57,6 @@ struct Rb_options
   int cpass_bitset;		// 1 | 2 | 4 for passes 1, 2, 3
   int max_retries;
   int o_direct_in;		// O_DIRECT or 0
-  int o_direct_out;		// O_DIRECT or 0
   int preview_lines;		// preview lines to show. 0 = disable
   int skipbs;			// initial size to skip on read error
   int max_skipbs;		// maximum size to skip on read error
@@ -77,7 +76,7 @@ struct Rb_options
   Rb_options()
     : max_error_rate( -1 ), min_outfile_size( -1 ), max_read_rate( 0 ),
       min_read_rate( -1 ), max_errors( -1 ), pause( 0 ), timeout( -1 ),
-      cpass_bitset( 7 ), max_retries( 0 ), o_direct_in( 0 ), o_direct_out( 0 ),
+      cpass_bitset( 7 ), max_retries( 0 ), o_direct_in( 0 ),
       preview_lines( 0 ), skipbs( default_skipbs ), max_skipbs( max_max_skipbs ),
       complete_only( false ), exit_on_error( false ),
       new_errors_only( false ), noscrape( false ), notrim( false ),
@@ -94,7 +93,7 @@ struct Rb_options
                max_errors == o.max_errors && pause == o.pause &&
                timeout == o.timeout && cpass_bitset == o.cpass_bitset &&
                max_retries == o.max_retries &&
-               o_direct_in == o.o_direct_in && o_direct_out == o.o_direct_out &&
+               o_direct_in == o.o_direct_in &&
                preview_lines == o.preview_lines &&
                skipbs == o.skipbs && max_skipbs == o.max_skipbs &&
                complete_only == o.complete_only &&
@@ -115,11 +114,13 @@ class Rescuebook : public Mapbook, public Rb_options
   {
   long long error_rate;
   long long sparse_size;		// end position of pending writes
-  long long recsize, errsize;		// total recovered and error sizes
+  long long non_tried_size, non_trimmed_size, non_scraped_size;
+  long long bad_sector_size, finished_size;
   const Domain * const test_domain;	// good/bad map for test mode
   const char * const iname_;
   int e_code;				// error code for errors_or_timeout
-					// 1 rate, 2 errors, 4 timeout
+					// 1 rate, 2 errors, 4 timeout,
+					// 8 other (explained in final_msg)
   long errors;				// error areas found so far
   int ides_, odes_;			// input and output file descriptors
   const bool synchronous_;
@@ -136,9 +137,10 @@ class Rescuebook : public Mapbook, public Rb_options
   bool first_post;			// first read in current pass
   bool first_read;			// first read overall
 
+  void change_chunk_status( const Block & b, const Sblock::Status st );
   bool extend_outfile_size();
   int copy_block( const Block & b, int & copied_size, int & error_size );
-  void count_errors();
+  void initialize_sizes();
   bool errors_or_timeout()
     { if( max_errors >= 0 && errors > max_errors ) e_code |= 2;
       return ( e_code != 0 ); }
@@ -171,6 +173,7 @@ public:
               const Rb_options & rb_opts, const char * const iname,
               const char * const mapname, const int cluster,
               const int hardbs, const bool synchronous );
+  ~Rescuebook() { delete[] voe_buf; }
 
   int do_rescue( const int ides, const int odes );
   };

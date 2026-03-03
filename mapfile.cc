@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2015 Antonio Diaz Diaz.
+    Copyright (C) 2004-2016 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -177,8 +177,7 @@ bool Mapfile::read_mapfile( const int default_sblock_status, const bool ro )
   FILE * f = 0;
   errno = 0;
   read_only_ = ro;
-  if( ro && std::strcmp( filename_, "-" ) == 0 && !isatty( fileno( stdin ) ) )
-    f = stdin;
+  if( ro && std::strcmp( filename_, "-" ) == 0 ) f = stdin;
   else if( ro || ( !(f = std::fopen( filename_, "r+" )) && errno != ENOENT ) )
     { f = std::fopen( filename_, "r" ); read_only_ = true; }
   if( !f ) return false;
@@ -230,7 +229,8 @@ bool Mapfile::read_mapfile( const int default_sblock_status, const bool ro )
   }
 
 
-int Mapfile::write_mapfile( FILE * f, const bool timestamp ) const
+int Mapfile::write_mapfile( FILE * f, const bool timestamp,
+                            const bool mf_sync ) const
   {
   const bool f_given = ( f != 0 );
 
@@ -248,6 +248,7 @@ int Mapfile::write_mapfile( FILE * f, const bool timestamp ) const
     const Sblock & sb = sblock_vector[i];
     std::fprintf( f, "0x%08llX  0x%08llX  %c\n", sb.pos(), sb.size(), sb.status() );
     }
+  if( mf_sync ) fsync( fileno( f ) );
   return ( f_given || std::fclose( f ) == 0 );
   }
 
@@ -380,8 +381,7 @@ void Mapfile::rfind_chunk( Block & b, const Sblock::Status st,
   }
 
 
-// Returns an adjust value (-1, 0, +1) to keep "errors" updated without
-// having to call count_errors every time.
+// Returns an adjust value (-1, 0, +1) to keep "errors" updated.
 //   - - -   -->   - + -   return +1
 //   - - +   -->   - + +   return  0
 //   - + -   -->   - - -   return -1
@@ -392,7 +392,8 @@ void Mapfile::rfind_chunk( Block & b, const Sblock::Status st,
 //   + + +   -->   + - +   return +1
 //
 int Mapfile::change_chunk_status( const Block & b, const Sblock::Status st,
-                                  const Domain & domain )
+                                  const Domain & domain,
+                                  Sblock::Status * const old_stp )
   {
   if( b.size() <= 0 ) return 0;
   if( !domain.includes( b ) || find_index( b.pos() ) < 0 ||
@@ -401,6 +402,7 @@ int Mapfile::change_chunk_status( const Block & b, const Sblock::Status st,
   if( !sblock_vector[index_].includes( b ) )
     internal_error( "can't change status of chunk spread over more than 1 block." );
   const Sblock::Status old_st = sblock_vector[index_].status();
+  if( old_stp ) *old_stp = old_st;
   if( st == old_st ) return 0;
   const bool old_st_good = Sblock::is_good_status( old_st );
   const bool new_st_good = Sblock::is_good_status( st );

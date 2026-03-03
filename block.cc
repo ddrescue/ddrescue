@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2015 Antonio Diaz Diaz.
+    Copyright (C) 2004-2016 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -97,6 +97,7 @@ Block Block::split( long long pos, const int hardbs )
 Domain::Domain( const long long p, const long long s,
                 const char * const mapname, const bool loose )
   {
+  reset_cached_in_size();
   const Block b( p, s );
   if( !mapname || !mapname[0] ) { block_vector.push_back( b ); return; }
   Mapfile mapfile( mapname );
@@ -121,6 +122,7 @@ Domain::Domain( const long long p, const long long s,
 
 void Domain::crop( const Block & b )
   {
+  reset_cached_in_size();
   unsigned long r = block_vector.size();
   while( r > 0 && b < block_vector[r-1] ) --r;
   if( r > 0 ) block_vector[r-1].crop( b );

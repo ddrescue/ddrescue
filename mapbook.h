@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2015 Antonio Diaz Diaz.
+    Copyright (C) 2004-2016 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -20,12 +20,13 @@ class Mapbook : public Mapfile
   const long long offset_;		// outfile offset (opos - ipos);
   long long mapfile_isize_;
   Domain & domain_;			// rescue domain
-  uint8_t *iobuf_base, *iobuf_;		// iobuf is aligned to page and hardbs
+  uint8_t *iobuf_base;			// alignment + iobuf + iobuf_aux
+  uint8_t *iobuf_;			// buffer aligned to page and hardbs
   const int hardbs_, softbs_;
   const int iobuf_size_;
   std::string final_msg_;
   int final_errno_;
-  long ul_t1;				// variable for update_mapfile
+  long um_t1, um_t1s;			// variables for update_mapfile
   bool mapfile_exists_;
 
   bool save_mapfile( const char * const name );
@@ -44,6 +45,8 @@ public:
 
   const Domain & domain() const { return domain_; }
   uint8_t * iobuf() const { return iobuf_; }
+  uint8_t * iobuf_aux() const	// hardbs-sized buffer for verify_on_error
+    { return iobuf_ + iobuf_size_; }
   int iobuf_size() const { return iobuf_size_; }
   int hardbs() const { return hardbs_; }
   int softbs() const { return softbs_; }
@@ -115,7 +118,7 @@ public:
 
 class Genbook : public Mapbook
   {
-  long long recsize, gensize;		// total recovered and generated sizes
+  long long finished_size, gensize;	// total recovered and generated sizes
   int odes_;				// output file descriptor
 					// variables for show_status
   long long a_rate, c_rate, first_size, last_size;

@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2015 Antonio Diaz Diaz.
+    Copyright (C) 2004-2016 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -15,9 +15,11 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+int verbosity = 0;
+
 namespace {
 
-const char * const program_year = "2015";
+const char * const program_year = "2016";
 std::string command_line;
 
 
@@ -35,8 +37,8 @@ long long getnum( const char * const ptr, const int hardbs,
                   const long long min = LLONG_MIN + 1,
                   const long long max = LLONG_MAX, const bool comma = false )
   {
-  errno = 0;
   char * tail;
+  errno = 0;
   long long result = strtoll( ptr, &tail, 0 );
   if( tail == ptr )
     {
@@ -51,7 +53,6 @@ long long getnum( const char * const ptr, const int hardbs,
     bool bad_multiplier = false;
     switch( tail[0] )
       {
-      case ' ': break;
       case ',': if( !comma ) { bad_multiplier = true; } break;
       case 'Y': exponent = 8; break;
       case 'Z': exponent = 7; break;
@@ -67,7 +68,7 @@ long long getnum( const char * const ptr, const int hardbs,
       case 's': if( hardbs > 0 ) { factor = hardbs; exponent = 1; }
                 else bad_multiplier = true;
                 break;
-      default: bad_multiplier = true;
+      default : bad_multiplier = true;
       }
     if( bad_multiplier )
       {
@@ -151,24 +152,18 @@ const char * get_timestamp( const long t = 0 )
 } // end namespace
 
 
-int verbosity = 0;
-
-
 void show_error( const char * const msg, const int errcode, const bool help )
   {
-  if( verbosity >= 0 )
+  if( verbosity < 0 ) return;
+  if( msg && msg[0] )
     {
-    if( msg && msg[0] )
-      {
-      std::fprintf( stderr, "%s: %s", program_name, msg );
-      if( errcode > 0 )
-        std::fprintf( stderr, ": %s", std::strerror( errcode ) );
-      std::fputc( '\n', stderr );
-      }
-    if( help )
-      std::fprintf( stderr, "Try '%s --help' for more information.\n",
-                    invocation_name );
+    std::fprintf( stderr, "%s: %s", program_name, msg );
+    if( errcode > 0 ) std::fprintf( stderr, ": %s", std::strerror( errcode ) );
+    std::fputc( '\n', stderr );
     }
+  if( help )
+    std::fprintf( stderr, "Try '%s --help' for more information.\n",
+                  invocation_name );
   }
 
 
@@ -265,5 +260,48 @@ const char * format_num( long long num, long long limit,
   for( int i = 0; i < 8 && llabs( num ) > limit; ++i )
     { num /= factor; p = prefix[i]; }
   snprintf( buf, bufsize, "%lld %s", num, p );
+  return buf;
+  }
+
+
+// Shows the fraction "num/den" as a percentage with "prec" decimals.
+// If 'prec' is negative, only the needed decimals are shown.
+//
+const char * format_percentage( long long num, long long den,
+                                const int iwidth, int prec )
+  {
+  static char buf[80];
+
+  if( den < 0 ) { num = -num; den = -den; }
+  if( llabs( num ) <= LLONG_MAX / 100 && den <= LLONG_MAX / 10 ) num *= 100;
+  else if( llabs( num ) <= LLONG_MAX / 10 ) { num *= 10; den /= 10; }
+  else den /= 100;
+  if( den == 0 )
+    {
+    if( num > 0 ) return "+INF";
+    else if( num < 0 ) return "-INF";
+    else return "NAN";
+    }
+  const bool trunc = ( prec < 0 );
+  if( prec < 0 ) prec = -prec;
+
+  unsigned i;
+  if( num < 0 && num / den == 0 )
+    i = snprintf( buf, sizeof( buf ), "%*s", iwidth, "-0" );
+  else i = snprintf( buf, sizeof( buf ), "%*lld", iwidth, num / den );
+  if( i < sizeof( buf ) - 2 )
+    {
+    long long rest = llabs( num ) % den;
+    if( prec > 0 && ( rest > 0 || !trunc ) )
+      {
+      buf[i++] = '.';
+      while( prec > 0 && ( rest > 0 || !trunc ) && i < sizeof( buf ) - 2 )
+        { rest *= 10; buf[i++] = (char)( rest / den ) + '0';
+          rest %= den; --prec; }
+      }
+    }
+  else i = sizeof( buf ) - 2;
+  buf[i++] = '%';
+  buf[i] = 0;
   return buf;
   }

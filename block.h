@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2015 Antonio Diaz Diaz.
+    Copyright (C) 2004-2016 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -117,6 +117,8 @@ public:
 class Domain
   {
   std::vector< Block > block_vector;	// blocks are ordered and don't overlap
+  mutable long long cached_in_size;
+  void reset_cached_in_size() { cached_in_size = -1; }
 
 public:
   Domain( const long long p, const long long s,
@@ -132,10 +134,13 @@ public:
 
   long long in_size() const
     {
-    long long s = 0;
-    for( unsigned long i = 0; i < block_vector.size(); ++i )
-      s += block_vector[i].size();
-    return s;
+    if( cached_in_size < 0 )
+      {
+      cached_in_size = 0;
+      for( unsigned long i = 0; i < block_vector.size(); ++i )
+        cached_in_size += block_vector[i].size();
+      }
+    return cached_in_size;
     }
 
   bool operator!=( const Domain & d ) const
@@ -170,7 +175,11 @@ public:
     }
 
   void clear()
-    { block_vector.clear(); block_vector.push_back( Block( 0, 0 ) ); }
+    {
+    block_vector.clear(); block_vector.push_back( Block( 0, 0 ) );
+    cached_in_size = 0;
+    }
+
   void crop( const Block & b );
   void crop_by_file_size( const long long size ) { crop( Block( 0, size ) ); }
   };
@@ -206,7 +215,8 @@ public:
   void set_to_status( const Sblock::Status st )
     { sblock_vector.assign( 1, Sblock( 0, -1, st ) ); }
   bool read_mapfile( const int default_sblock_status = 0, const bool ro = true );
-  int write_mapfile( FILE * f = 0, const bool timestamp = false ) const;
+  int write_mapfile( FILE * f = 0, const bool timestamp = false,
+                     const bool mf_sync = false ) const;
 
   bool blank() const;
   long long current_pos() const { return current_pos_; }
@@ -243,7 +253,8 @@ public:
   void rfind_chunk( Block & b, const Sblock::Status st,
                     const Domain & domain, const int alignment ) const;
   int change_chunk_status( const Block & b, const Sblock::Status st,
-                           const Domain & domain );
+                           const Domain & domain,
+                           Sblock::Status * const old_stp = 0 );
 
   static bool isstatus( const int st )
     { return ( st == copying || st == trimming || st == scraping ||
@@ -268,3 +279,5 @@ bool write_timestamp( FILE * const f );
 bool write_final_timestamp( FILE * const f );
 const char * format_num( long long num, long long limit = 999999,
                          const int set_prefix = 0 );
+const char * format_percentage( long long num, long long den,
+                                const int iwidth = 3, int prec = -2 );
