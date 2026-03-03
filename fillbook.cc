@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
+    Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
     Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -46,8 +46,10 @@ int Fillbook::fill_areas( const std::string & filltypes )
     current_status( filling );
     while( b.size() > 0 )
       {
+      current_pos( b.pos() );
       if( verbosity >= 0 )
         { show_status( b.pos(), first_post ); first_post = false; }
+      if( interrupted() ) return -1;
       const int retval = fill_block( b );
       if( retval ) return retval;
       if( !update_logfile( odes_ ) ) return -2;
@@ -87,7 +89,7 @@ int Fillbook::do_fill( const int odes, const std::string & filltypes )
   if( verbosity >= 0 )
     {
     std::printf( "Press Ctrl-C to interrupt\n" );
-    if( filename() )
+    if( logfile_exists() )
       {
       std::printf( "Initial status (read from logfile)\n" );
       std::printf( "filled size:    %10sB,", format_num( filled_size ) );

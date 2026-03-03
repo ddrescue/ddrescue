@@ -1,3 +1,20 @@
+2012-01-01  Antonio Diaz Diaz  <ant_diaz@teleline.es>
+
+	* Version 1.15 released.
+	* Added new option `-a, --min-read-rate'.
+	* Added new option `-I, --verify-input-size'.
+	* Added new option `-x, --extend-outfile'.
+	* main.cc: Verify that infile, outfile and logfile are all
+	  different.
+	* Non-tried blocks are now read aligned to cluster-size sectors.
+	* rescuebook.cc: Improved skip algorithm for the split pass.
+	* main.cc: Removed spurious warning about `-D' ignored in fill mode.
+	* ddrescue.texinfo: Improved description of algorithm.
+	* logbook.cc (change_chunk_status): Return an adjust value (-1, 0, 1)
+	  to keep "errors" updated without calling count_errors every time.
+	* ddrescue.cc: Renamed to io.cc.
+	* Added `ddrescuelog', a program for logfile manipulation.
+
 2011-01-10  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
 	* Version 1.14 released.
@@ -12,8 +29,8 @@
 
 	* Version 1.13 released.
 	* Non-regular output files are no more overwritten by default.
-	* Added new option `--force'.
-	* Added new option `--preallocate'.
+	* Added new option `-f, --force'.
+	* Added new option `-p, --preallocate'.
 	* main.cc (write_logfile_header): Write command line to logfile.
 	* ddrescue.texinfo: Added info about logfile and recoverable formats.
 	* ddrescue.texinfo: Added a couple more warnings to the tutorial.
@@ -50,7 +67,7 @@
 2009-02-19  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
 	* Version 1.10 released.
-	* Added new option `--try-again'.
+	* Added new option `-T, --try-again'.
 	* rescuebook.cc: `skip_size' has been made independent of `softbs'.
 	* `change_chunk_status' is now faster for large logfiles.
 	* Fixed overflow when reading from devices of undefined size.
@@ -61,15 +78,15 @@
 2008-11-17  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
 	* Version 1.9 released.
-	* Added new option `--domain-logfile'.
+	* Added new option `-m, --domain-logfile'.
 	* Verbosity control of messages has been simplified.
 	* Changed LONG_LONG_MAX to LLONG_MAX.
 
 2008-02-24  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
 	* Version 1.8 released.
-	* Added new option `--generate-logfile'.
-	* Added new option `--synchronous'.
+	* Added new option `-g, --generate-logfile'.
+	* Added new option `-D, --synchronous'.
 	* Fill mode now works when outfile offset differs from 0.
 	* Updated `Fill Mode' chapter of the manual.
 
@@ -81,7 +98,7 @@
 	* Rescuebook::errors now counts the error areas found.
 	* Target `check' added to Makefile.
 	* rescuebook.cc (split_errors): Added new variable `error_counter'.
-	* Added new option `--retrim'.
+	* Added new option `-R, --retrim'.
 
 2007-11-16  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
@@ -91,7 +108,7 @@
 	* Added new pass that trims error areas backward before splitting.
 	* Added support for sparse output files.
 	* Blocks longer than hardbs are now split at sector boundaries.
-	* Added new option `--fill'.
+	* Added new option `-F, --fill'.
 	* Added new chapter `Fill Mode' to the manual.
 	* Added status line to logfile.
 	* An interrupted retry pass is now resumed instead of reinitiated.
@@ -110,7 +127,7 @@
 2007-06-18  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
 	* Version 1.4 released.
-	* Added new option `--direct'.
+	* Added new option `-d, --direct'.
 	* Fixed a bug showing bad initial error size.
 	* Fixed error counting.
 	* Small changes to documentation.
@@ -124,7 +141,7 @@
 2006-04-03  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
 	* Version 1.2 released.
-	* Added new option `--complete-only'.
+	* Added new option `-C, --complete-only'.
 	* Added new argument parser that replaces `getopt_long'.
 	* Logfile save interval is now dependent on logfile size.
 	* Small changes to documentation.
@@ -152,8 +169,8 @@
 	* ddrescue is now part of the GNU project.
 	* Added configure script and info file.
 	* Two small bugs corrected.
-	* Added new option `--binary-prefixes' to show binary multipliers
-	  in numbers (SI prefixes are used by default).
+	* Added new option `-B, --binary-prefixes' to show binary
+	  multipliers in numbers (SI prefixes are used by default).
 	* Numbers are accepted with decimal (SI) or binary multipliers.
 	* `badblocks file' renamed to `logfile'.
 	* Logfile is now also saved if max_errors are exceeded.
@@ -161,7 +178,8 @@
 2004-12-14  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
 	* Version 0.8 released.
-	* Added new option `--no-split' to disable splitting of damaged areas.
+	* Added new option `-n, --no-split' to disable splitting of
+	  damaged areas.
 
 2004-10-30  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
@@ -205,7 +223,7 @@
 	* Version 0.1 released.
 
 
-Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
+Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
 Antonio Diaz Diaz.
 
 This file is a collection of facts, and thus it is not copyrightable,

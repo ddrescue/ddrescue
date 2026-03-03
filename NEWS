@@ -1,14 +1,20 @@
-Changes in version 1.14:
+Changes in version 1.15:
 
-The new option "-R, --reverse", which reverses direction of copy
-operations, has been added.
+The new option "-a, --min-read-rate" has been added.
 
-The new option "-E, --max-error-rate", which stops ddrescue when the
-error size grows too fast (in Bytes/s), has been added.
+The new option "-I, --verify-input-size" has been added.
 
-The syntax of option "--max-errors" has been extended to specify new
-errors (--max-errors=+N).
+The new option "-x, --extend-outfile" has been added.
 
-The short name of option "--retrim" has been changed to "-M".
+Ddrescue now verifies that infile, outfile and logfile are all
+different.
 
-A spurious warning about "preallocation not available" has been fixed.
+Non-tried blocks are now read aligned to cluster-size sectors.
+
+The "split or skip" algorithm of the split pass has been improved.
+
+A spurious warning about "-D" being ignored in fill mode has been
+removed.
+
+Ddrescuelog, a tool for manipulation, display, conversion, comparison
+and testing of ddrescue logfiles, has been added.

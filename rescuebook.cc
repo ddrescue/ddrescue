@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
+    Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
     Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -33,14 +33,14 @@
 
 void Rescuebook::count_errors() throw()
   {
-  errors = 0;
   bool good = true;
+  errors = 0;
 
   for( int i = 0; i < sblocks(); ++i )
     {
     const Sblock & sb = sblock( i );
     if( !domain().includes( sb ) )
-      { if( domain() < sb ) break; else continue; }
+      { if( domain() < sb ) break; else { good = true; continue; } }
     switch( sb.status() )
       {
       case Sblock::non_tried:
@@ -59,10 +59,11 @@ int Rescuebook::copy_and_update( const Block & b, const Sblock::Status st,
                                  int & copied_size, int & error_size,
                                  const char * const msg, bool & first_post )
   {
-  update_status( b.pos(), msg, first_post );
+  current_pos( b.pos() );
+  show_status( b.pos(), msg, first_post );
   first_post = false;
-  update_ecode();
   if( too_many_errors() ) return 1;
+  if( interrupted() ) return -1;
   int retval = copy_block( b, copied_size, error_size );
   if( !retval )
     {
@@ -70,18 +71,12 @@ int Rescuebook::copy_and_update( const Block & b, const Sblock::Status st,
       truncate_vector( b.pos() + copied_size + error_size );
     if( copied_size > 0 )
       {
-      change_chunk_status( Block( b.pos(), copied_size ), Sblock::finished );
+      errors += change_chunk_status( Block( b.pos(), copied_size ), Sblock::finished );
       recsize += copied_size;
       }
     if( error_size > 0 )
       {
-      change_chunk_status( Block( b.pos() + copied_size, error_size ), st );
-      if( max_errors_ >= 0 )
-        {
-        count_errors();
-        update_ecode();
-        if( too_many_errors() ) retval = 1;
-        }
+      errors += change_chunk_status( Block( b.pos() + copied_size, error_size ), st );
       if( iname_ && access( iname_, F_OK ) != 0 )
         {
         final_msg( "input file disappeared" ); final_errno( errno );
@@ -98,41 +93,59 @@ int Rescuebook::copy_and_update( const Block & b, const Sblock::Status st,
 //
 int Rescuebook::copy_non_tried()
   {
-  long long pos = 0;
-  long long skip_size = 0;		// size to skip on error
   bool first_post = true;
+  bool resume = ( current_status() == copying &&
+                  domain().includes( current_pos() ) );
 
-  while( pos >= 0 )
+  while( true )
     {
-    Block b( pos, skip_size ? hardbs() : softbs() );
-    find_chunk( b, Sblock::non_tried );
-    if( b.size() <= 0 ) break;
-    if( pos != b.pos() ) skip_size = 0;	// reset size on block change
-    pos = b.end();
-    current_status( copying );
-    int copied_size = 0, error_size = 0;
-    const int retval =
-      copy_and_update( b, skip_size ? Sblock::bad_sector : Sblock::non_trimmed,
-                       copied_size, error_size,
-                       "Copying non-tried blocks...", first_post );
-    if( error_size > 0 )
+    long long pos = 0;
+    long long skip_size = 0;		// size to skip on error
+    bool block_found = false;
+    if( resume ) { resume = false; pos = current_pos(); block_found = true; }
+
+    while( pos >= 0 )
       {
-      errsize += error_size;
-      if( pos >= 0 && skip_size > 0 )
+      const int alignment = ( skip_size ? hardbs() : softbs() );
+      Block b( pos, alignment );
+      find_chunk( b, Sblock::non_tried, alignment );
+      if( b.size() <= 0 ) break;
+      if( pos != b.pos() ) skip_size = 0;	// reset size on block change
+      pos = b.end();
+      current_status( copying );
+      block_found = true;
+      const Sblock::Status st = ( skip_size ? Sblock::bad_sector :
+                                              Sblock::non_trimmed );
+      int copied_size = 0, error_size = 0;
+      const int retval = copy_and_update( b, st, copied_size, error_size,
+                                          "Copying non-tried blocks...",
+                                          first_post );
+      if( error_size > 0 ) errsize += error_size;
+      else if( skip_size > 0 && copied_size > 0 )
+        { skip_size -= copied_size; if( skip_size < 0 ) skip_size = 0; }
+      if( retval ) return retval;
+      if( error_size > 0 || slow_read() )
         {
-        b.pos( pos ); b.size( skip_size ); b.fix_size();
-        find_chunk( b, Sblock::non_tried );
-        if( pos == b.pos() && b.size() > 0 )
-          { change_chunk_status( b, Sblock::non_trimmed );
-            pos = b.end(); errsize += b.size(); }
+        if( pos >= 0 && skip_size > 0 )
+          {
+          b.pos( pos ); b.size( skip_size ); b.fix_size();
+          find_chunk( b, Sblock::non_tried );
+          if( pos == b.pos() && b.size() > 0 )
+            {
+            if( error_size > 0 )
+              { errors += change_chunk_status( b, Sblock::non_trimmed );
+                errsize += b.size(); }
+            pos = b.end();
+            }
+          }
+        if( skip_size < skipbs() ) skip_size = skipbs();
+        else if( skip_size < LLONG_MAX / 4 ) skip_size *= 2;
         }
-      if( skip_size < skipbs() ) skip_size = skipbs();
-      else if( skip_size < LLONG_MAX / 4 ) skip_size *= 2;
+      update_status();
+      if( !update_logfile( odes_ ) ) return -2;
       }
-    else if( skip_size > 0 && copied_size > 0 )
-      { skip_size -= copied_size; if( skip_size < 0 ) skip_size = 0; }
-    if( retval ) return retval;
-    if( !update_logfile( odes_ ) ) return -2;
+    if( !block_found ) break;
+    reduce_min_read_rate();
     }
   return 0;
   }
@@ -144,43 +157,61 @@ int Rescuebook::copy_non_tried()
 //
 int Rescuebook::rcopy_non_tried()
   {
-  long long end = LLONG_MAX;
-  long long skip_size = 0;		// size to skip on error
   bool first_post = true;
+  bool resume = ( current_status() == copying &&
+                  domain().includes( current_pos() - 1 ) );
 
-  while( end > 0 )
+  while( true )
     {
-    long long pos = end - ( skip_size ? hardbs() : softbs() );
-    if( pos < 0 ) pos = 0;
-    Block b( pos, end - pos );
-    rfind_chunk( b, Sblock::non_tried );
-    if( b.size() <= 0 ) break;
-    if( pos != b.pos() ) skip_size = 0;	// reset size on block change
-    end = b.pos();
-    current_status( copying );
-    int copied_size = 0, error_size = 0;
-    const int retval =
-      copy_and_update( b, skip_size ? Sblock::bad_sector : Sblock::non_trimmed,
-                       copied_size, error_size,
-                       "Copying non-tried blocks...", first_post );
-    if( error_size > 0 )
+    long long end = LLONG_MAX;
+    long long skip_size = 0;		// size to skip on error
+    bool block_found = false;
+    if( resume ) { resume = false; end = current_pos(); block_found = true; }
+
+    while( end > 0 )
       {
-      errsize += error_size;
-      if( end > 0 && skip_size > 0 )
+      const int alignment = ( skip_size ? hardbs() : softbs() );
+      long long pos = end - alignment;
+      if( pos < 0 ) pos = 0;
+      Block b( pos, end - pos );
+      rfind_chunk( b, Sblock::non_tried, alignment );
+      if( b.size() <= 0 ) break;
+      if( pos != b.pos() ) skip_size = 0;	// reset size on block change
+      end = b.pos();
+      current_status( copying );
+      block_found = true;
+      const Sblock::Status st = ( skip_size ? Sblock::bad_sector :
+                                              Sblock::non_trimmed );
+      int copied_size = 0, error_size = 0;
+      const int retval = copy_and_update( b, st, copied_size, error_size,
+                                          "Copying non-tried blocks...",
+                                          first_post );
+      if( error_size > 0 ) errsize += error_size;
+      else if( skip_size > 0 && copied_size > 0 )
+        { skip_size -= copied_size; if( skip_size < 0 ) skip_size = 0; }
+      if( retval ) return retval;
+      if( error_size > 0 || slow_read() )
         {
-        b.size( skip_size ); b.end( end ); pos = b.pos();
-        rfind_chunk( b, Sblock::non_tried );
-        if( pos == b.pos() && b.size() > 0 )
-          { change_chunk_status( b, Sblock::non_trimmed );
-            end = b.pos(); errsize += b.size(); }
+        if( end > 0 && skip_size > 0 )
+          {
+          b.size( skip_size ); b.end( end ); pos = b.pos();
+          rfind_chunk( b, Sblock::non_tried );
+          if( pos == b.pos() && b.size() > 0 )
+            {
+            if( error_size > 0 )
+              { errors += change_chunk_status( b, Sblock::non_trimmed );
+                errsize += b.size(); }
+            end = b.pos();
+            }
+          }
+        if( skip_size < skipbs() ) skip_size = skipbs();
+        else if( skip_size < LLONG_MAX / 4 ) skip_size *= 2;
         }
-      if( skip_size < skipbs() ) skip_size = skipbs();
-      else if( skip_size < LLONG_MAX / 4 ) skip_size *= 2;
+      update_status();
+      if( !update_logfile( odes_ ) ) return -2;
       }
-    else if( skip_size > 0 && copied_size > 0 )
-      { skip_size -= copied_size; if( skip_size < 0 ) skip_size = 0; }
-    if( retval ) return retval;
-    if( !update_logfile( odes_ ) ) return -2;
+    if( !block_found ) break;
+    reduce_min_read_rate();
     }
   return 0;
   }
@@ -208,14 +239,15 @@ int Rescuebook::trim_errors()
                                         error_size, "Trimming failed blocks...",
                                         first_post );
     if( copied_size > 0 ) errsize -= copied_size;
+    if( retval ) return retval;
     if( error_size > 0 && end > 0 )
       {
       const int index = find_index( end - 1 );
       if( index >= 0 && domain().includes( sblock( index ) ) &&
           sblock( index ).status() == Sblock::non_trimmed )
-        change_chunk_status( sblock( index ), Sblock::non_split );
+        errors += change_chunk_status( sblock( index ), Sblock::non_split );
       }
-    if( retval ) return retval;
+    update_status();
     if( !update_logfile( odes_ ) ) return -2;
     }
   return 0;
@@ -242,14 +274,15 @@ int Rescuebook::rtrim_errors()
                                         error_size, "Trimming failed blocks...",
                                         first_post );
     if( copied_size > 0 ) errsize -= copied_size;
+    if( retval ) return retval;
     if( error_size > 0 && pos >= 0 )
       {
       const int index = find_index( pos );
       if( index >= 0 && domain().includes( sblock( index ) ) &&
           sblock( index ).status() == Sblock::non_trimmed )
-        change_chunk_status( sblock( index ), Sblock::non_split );
+        errors += change_chunk_status( sblock( index ), Sblock::non_split );
       }
-    if( retval ) return retval;
+    update_status();
     if( !update_logfile( odes_ ) ) return -2;
     }
   return 0;
@@ -264,18 +297,20 @@ int Rescuebook::split_errors()
   bool first_post = true;
   bool resume = ( current_status() == splitting &&
                   domain().includes( current_pos() ) );
-  while( true )
+
+  for( bool first_pass = true; ; first_pass = false )
     {
     long long pos = 0;
-    if( resume ) { resume = false; pos = current_pos(); }
     int error_counter = 0;
     bool block_found = false;
+    if( resume ) { resume = false; pos = current_pos(); block_found = true; }
 
     while( pos >= 0 )
       {
       Block b( pos, hardbs() );
       find_chunk( b, Sblock::non_split );
       if( b.size() <= 0 ) break;
+      if( pos != b.pos() ) error_counter = 0;	// reset cntr on block change
       pos = b.end();
       current_status( splitting );
       block_found = true;
@@ -284,20 +319,28 @@ int Rescuebook::split_errors()
                                           error_size, "Splitting failed blocks...",
                                           first_post );
       if( copied_size > 0 ) errsize -= copied_size;
+      if( retval ) return retval;
       if( error_size <= 0 ) error_counter = 0;
-      else if( pos >= 0 && ++error_counter >= 2 &&
-               error_counter * hardbs() >= 2 * skipbs() )
+      else if( pos >= 0 && ++error_counter >= 8 )
         {			// skip after enough consecutive errors
         error_counter = 0;
         const int index = find_index( pos );
-        if( index >= 0 && sblock( index ).status() == Sblock::non_split )
+        if( index >= 0 )
           {
           const Sblock & sb = sblock( index );
-          if( sb.size() >= 2 * skipbs() && sb.size() >= 4 * hardbs() )
-            pos += ( sb.size() / ( 2 * hardbs() ) ) * hardbs();
+          if( sb.status() == Sblock::non_split && sb.size() >= skipbs() )
+            {
+            if( sb.size() >= 2 * skipbs() )	// split
+              {
+              if( first_pass || sblocks() < 1000 )
+                pos += ( sb.size() / ( 2 * hardbs() ) ) * hardbs();
+              else pos = sb.end() - skipbs();
+              }
+            else pos = sb.end();		// skip
+            }
           }
         }
-      if( retval ) return retval;
+      update_status();
       if( !update_logfile( odes_ ) ) return -2;
       }
     if( !block_found ) break;
@@ -315,12 +358,13 @@ int Rescuebook::rsplit_errors()
   bool first_post = true;
   bool resume = ( current_status() == splitting &&
                   domain().includes( current_pos() - 1 ) );
-  while( true )
+
+  for( bool first_pass = true; ; first_pass = false )
     {
     long long end = LLONG_MAX;
-    if( resume ) { resume = false; end = current_pos(); }
     int error_counter = 0;
     bool block_found = false;
+    if( resume ) { resume = false; end = current_pos(); block_found = true; }
 
     while( end > 0 )
       {
@@ -329,6 +373,7 @@ int Rescuebook::rsplit_errors()
       Block b( pos, end - pos );
       rfind_chunk( b, Sblock::non_split );
       if( b.size() <= 0 ) break;
+      if( pos != b.pos() ) error_counter = 0;	// reset cntr on block change
       end = b.pos();
       current_status( splitting );
       block_found = true;
@@ -337,20 +382,28 @@ int Rescuebook::rsplit_errors()
                                           error_size, "Splitting failed blocks...",
                                           first_post );
       if( copied_size > 0 ) errsize -= copied_size;
+      if( retval ) return retval;
       if( error_size <= 0 ) error_counter = 0;
-      else if( end > 0 && ++error_counter >= 2 &&
-               error_counter * hardbs() >= 2 * skipbs() )
+      else if( end > 0 && ++error_counter >= 8 )
         {			// skip after enough consecutive errors
         error_counter = 0;
         const int index = find_index( end - 1 );
-        if( index >= 0 && sblock( index ).status() == Sblock::non_split )
+        if( index >= 0 )
           {
           const Sblock & sb = sblock( index );
-          if( sb.size() >= 2 * skipbs() && sb.size() >= 4 * hardbs() )
-            end -= ( sb.size() / ( 2 * hardbs() ) ) * hardbs();
+          if( sb.status() == Sblock::non_split && sb.size() >= skipbs() )
+            {
+            if( sb.size() >= 2 * skipbs() )	// split
+              {
+              if( first_pass || sblocks() < 1000 )
+                end -= ( sb.size() / ( 2 * hardbs() ) ) * hardbs();
+              else end = sb.pos() + skipbs();
+              }
+            else end = sb.pos();		// skip
+            }
           }
         }
-      if( retval ) return retval;
+      update_status();
       if( !update_logfile( odes_ ) ) return -2;
       }
     if( !block_found ) break;
@@ -372,8 +425,8 @@ int Rescuebook::copy_errors()
   for( int retry = 1; max_retries_ < 0 || retry <= max_retries_; ++retry )
     {
     long long pos = 0;
-    if( resume ) { resume = false; pos = current_pos(); }
     bool first_post = true, block_found = false;
+    if( resume ) { resume = false; pos = current_pos(); block_found = true; }
     snprintf( msgbuf + msglen, ( sizeof msgbuf ) - msglen, "%d", retry );
 
     while( pos >= 0 )
@@ -389,6 +442,7 @@ int Rescuebook::copy_errors()
                                           error_size, msgbuf, first_post );
       if( copied_size > 0 ) errsize -= copied_size;
       if( retval ) return retval;
+      update_status();
       if( !update_logfile( odes_ ) ) return -2;
       }
     if( !block_found ) break;
@@ -410,8 +464,8 @@ int Rescuebook::rcopy_errors()
   for( int retry = 1; max_retries_ < 0 || retry <= max_retries_; ++retry )
     {
     long long end = LLONG_MAX;
-    if( resume ) { resume = false; end = current_pos(); }
     bool first_post = true, block_found = false;
+    if( resume ) { resume = false; end = current_pos(); block_found = true; }
     snprintf( msgbuf + msglen, ( sizeof msgbuf ) - msglen, "%d", retry );
 
     while( end > 0 )
@@ -429,6 +483,7 @@ int Rescuebook::rcopy_errors()
                                           error_size, msgbuf, first_post );
       if( copied_size > 0 ) errsize -= copied_size;
       if( retval ) return retval;
+      update_status();
       if( !update_logfile( odes_ ) ) return -2;
       }
     if( !block_found ) break;
@@ -437,26 +492,30 @@ int Rescuebook::rcopy_errors()
   }
 
 
-Rescuebook::Rescuebook( const long long ipos, const long long opos,
-                        Domain & dom, const long long isize,
+Rescuebook::Rescuebook( const long long offset, const long long isize,
+                        const long long max_error_rate,
+                        const long long min_outfile_size,
+                        const long long min_read_rate, Domain & dom,
                         const char * const iname, const char * const logname,
                         const int cluster, const int hardbs,
-                        const int max_error_rate, const int max_errors,
-                        const int max_retries, const bool complete_only,
-                        const bool new_errors_only, const bool nosplit,
-                        const bool retrim, const bool sparse,
+                        const int max_errors, const int max_retries,
+                        const bool complete_only, const bool new_errors_only,
+                        const bool nosplit, const bool retrim, const bool sparse,
                         const bool synchronous, const bool try_again )
-  : Logbook( ipos, opos, dom, isize, logname, cluster, hardbs, complete_only ),
-    sparse_size( 0 ),
-    iname_( ( access( iname, F_OK ) == 0 ) ? iname : 0 ),
+  : Logbook( offset, isize, dom, logname, cluster, hardbs, complete_only ),
     max_error_rate_( max_error_rate ),
+    min_outfile_size_( min_outfile_size ),
+    min_read_rate_( min_read_rate ),
+    sparse_size( sparse ? 0 : -1 ),
+    iname_( ( access( iname, F_OK ) == 0 ) ? iname : 0 ),
     max_retries_( max_retries ),
-    skipbs_( std::max( 65536, hardbs ) ),
+    skipbs_( std::max( 65536, 16 * hardbs ) ),
     max_errors_( max_errors ),
     e_code( 0 ),
-    nosplit_( nosplit ), sparse_( sparse ), synchronous_( synchronous ),
-    a_rate( 0 ), c_rate( 0 ), e_rate( 0 ), first_size( 0 ), last_size( 0 ),
-    last_errsize( 0 ), last_ipos( 0 ), t0( 0 ), t1( 0 ), ts( 0 ), oldlen( 0 )
+    nosplit_( nosplit ), synchronous_( synchronous ),
+    a_rate( 0 ), c_rate( 0 ), first_size( 0 ), last_size( 0 ),
+    last_errsize( 0 ), last_ipos( 0 ), t0( 0 ), t1( 0 ), ts( 0 ), oldlen( 0 ),
+    status_changed( false )
   {
   if( retrim )
     for( int index = 0; index < sblocks(); ++index )
@@ -480,7 +539,6 @@ Rescuebook::Rescuebook( const long long ipos, const long long opos,
       }
   count_errors();
   if( new_errors_only ) max_errors_ += errors;
-  update_ecode();
   }
 
 
@@ -510,7 +568,7 @@ int Rescuebook::do_rescue( const int ides, const int odes, const bool reverse )
   if( verbosity >= 0 )
     {
     std::printf( "Press Ctrl-C to interrupt\n" );
-    if( filename() )
+    if( logfile_exists() )
       {
       std::printf( "Initial status (read from logfile)\n" );
       std::printf( "rescued: %10sB,", format_num( recsize ) );
@@ -520,6 +578,7 @@ int Rescuebook::do_rescue( const int ides, const int odes, const bool reverse )
       }
     }
   int retval = 0;
+  update_status();				// first call
   if( copy_pending && !too_many_errors() )
     retval = ( reverse ? rcopy_non_tried() : copy_non_tried() );
   if( !retval && trim_pending && !too_many_errors() )
@@ -528,8 +587,8 @@ int Rescuebook::do_rescue( const int ides, const int odes, const bool reverse )
     retval = ( reverse ? rsplit_errors() : split_errors() );
   if( !retval && max_retries_ != 0 && !too_many_errors() )
     retval = ( reverse ? rcopy_errors() : copy_errors() );
-  update_status( -1, (retval ? 0 : "Finished"), true );
-  update_ecode();
+  if( !status_changed ) update_status( true );	// force update of rates
+  show_status( -1, (retval ? 0 : "Finished"), true );
   if( !retval && too_many_errors() ) retval = 1;
   if( verbosity >= 0 )
     {
@@ -547,9 +606,9 @@ int Rescuebook::do_rescue( const int ides, const int odes, const bool reverse )
     {
     if( retval == 0 ) current_status( finished );
     else if( retval < 0 ) retval = 0;		// interrupted by user
-    if( !sync_sparse_file() )
+    if( !extend_outfile_size() )		// sparse or -x option
       {
-      show_error( "Error syncing sparse output file." );
+      show_error( "Error extending output file size." );
       if( retval == 0 ) retval = 1;
       }
     compact_sblock_vector();

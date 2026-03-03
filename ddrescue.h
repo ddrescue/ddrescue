@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
+    Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
     Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ public:
 private:
   const long long offset_;		// outfile offset (opos - ipos);
   long long current_pos_;
+  long long logfile_isize_;
   Status current_status_;
   Domain & domain_;			// rescue domain
   uint8_t *iobuf_base, *iobuf_;		// iobuf is aligned to page and hardbs
@@ -37,6 +38,9 @@ private:
   std::vector< Sblock > sblock_vector;	// note: blocks are consecutive
   long ul_t1;				// variable for update_logfile
 
+  Logbook( const Logbook & );
+  void operator=( const Logbook & );
+
   void erase_sblock( const int i )
     { sblock_vector.erase( sblock_vector.begin() + i ); }
   void insert_sblock( const int i, const Sblock & sb )
@@ -44,28 +48,33 @@ private:
   void split_domain_border_sblocks();
 
 public:
-  Logbook( const long long ipos, const long long opos, Domain & dom,
-           const long long isize, const char * const name,
-           const int cluster, const int hardbs, const bool complete_only );
+  Logbook( const long long offset, const long long isize,
+           Domain & dom, const char * const logname,
+           const int cluster, const int hardbs,
+           const bool complete_only, const bool do_not_read = false );
   ~Logbook() { delete[] iobuf_base; }
 
   bool blank() const throw();
   void compact_sblock_vector();
-  bool update_logfile( const int odes = -1, const bool force = false );
+  bool update_logfile( const int odes = -1, const bool force = false,
+                       const bool retry = true );
+  void write_logfile( FILE * const f ) const throw();
 
   long long current_pos() const throw() { return current_pos_; }
   Status current_status() const throw() { return current_status_; }
   const Domain & domain() const throw() { return domain_; }
-  const char *filename() const throw() { return filename_; }
+  const char * filename() const throw() { return filename_; }
   uint8_t * iobuf() const throw() { return iobuf_; }
   int hardbs() const throw() { return hardbs_; }
   int softbs() const throw() { return softbs_; }
   long long offset() const throw() { return offset_; }
   const char * final_msg() const throw() { return final_msg_; }
   int final_errno() const throw() { return final_errno_; }
+  bool logfile_exists() const throw() { return ( logfile_isize_ > 0 ); }
+  long long logfile_isize() const throw() { return logfile_isize_; }
 
   void current_pos( const long long pos ) throw() { current_pos_ = pos; }
-  void current_status( Status st ) throw() { current_status_ = st; }
+  void current_status( const Status st ) throw() { current_status_ = st; }
   void final_msg( const char * const msg ) throw() { final_msg_ = msg; }
   void final_errno( const int e ) throw() { final_errno_ = e; }
 
@@ -74,17 +83,25 @@ public:
   int sblocks() const throw() { return (int)sblock_vector.size(); }
   void change_sblock_status( const int i, const Sblock::Status st ) throw()
     { sblock_vector[i].status( st ); }
+  void split_sblock_by( const long long pos, const int i )
+    {
+    if( sblock_vector[i].includes( pos ) )
+      insert_sblock( i, sblock_vector[i].split( pos ) );
+    }
   void truncate_vector( const long long pos );
 
   int find_index( const long long pos ) const throw();
-  void find_chunk( Block & b, const Sblock::Status st ) const;
-  void rfind_chunk( Block & b, const Sblock::Status st ) const;
-  void change_chunk_status( const Block & b, const Sblock::Status st );
+  void find_chunk( Block & b, const Sblock::Status st,
+                   const int alignment = 0 ) const;
+  void rfind_chunk( Block & b, const Sblock::Status st,
+                    const int alignment = 0 ) const;
+  int change_chunk_status( const Block & b, const Sblock::Status st );
 
   static bool isstatus( const int st ) throw()
     { return ( st == copying || st == trimming || st == splitting ||
                st == retrying || st == filling || st == generating ||
                st == finished ); }
+  static const char * status_name( const Status st ) throw();
   };
 
 
@@ -106,10 +123,10 @@ class Fillbook : public Logbook
   void show_status( const long long ipos, bool force = false ) throw();
 
 public:
-  Fillbook( const long long ipos, const long long opos, Domain & dom,
-            const char * const name, const int cluster, const int hardbs,
+  Fillbook( const long long offset, Domain & dom,
+            const char * const logname, const int cluster, const int hardbs,
             const bool synchronous )
-    : Logbook( ipos, opos, dom, 0, name, cluster, hardbs, true ),
+    : Logbook( offset, 0, dom, logname, cluster, hardbs, true ),
       synchronous_( synchronous ),
       a_rate( 0 ), c_rate( 0 ), first_size( 0 ), last_size( 0 ),
       last_ipos( 0 ), t0( 0 ), t1( 0 )
@@ -130,15 +147,15 @@ class Genbook : public Logbook
   long t0, t1;
   int oldlen;
 
-  int check_block( const Block & b, int & copied_size, int & error_size );
+  void check_block( const Block & b, int & copied_size, int & error_size );
   int check_all();
   void show_status( const long long ipos, const char * const msg = 0,
                     bool force = false ) throw();
 public:
-  Genbook( const long long ipos, const long long opos, Domain & dom,
-           const long long isize, const char * const logname,
+  Genbook( const long long offset, const long long isize,
+           Domain & dom, const char * const logname,
            const int cluster, const int hardbs )
-    : Logbook( ipos, opos, dom, isize, logname, cluster, hardbs, false ),
+    : Logbook( offset, isize, dom, logname, cluster, hardbs, false ),
       a_rate( 0 ), c_rate( 0 ), first_size( 0 ), last_size( 0 ),
       last_ipos( 0 ), t0( 0 ), t1( 0 ), oldlen( 0 ) {}
 
@@ -148,31 +165,37 @@ public:
 
 class Rescuebook : public Logbook
   {
+  const long long max_error_rate_;
+  const long long min_outfile_size_;
+  long long min_read_rate_;
   long long sparse_size;		// end position of pending writes
   long long recsize, errsize;		// total recovered and error sizes
   const char * const iname_;
-  const int max_error_rate_, max_retries_, skipbs_;
+  const int max_retries_, skipbs_;
   int max_errors_;
   int e_code;				// error code for too many errors
   int errors;				// error areas found so far
   int ides_, odes_;			// input and output file descriptors
-  const bool nosplit_, sparse_, synchronous_;
+  const bool nosplit_, synchronous_;
 					// variables for update_status
-  long long a_rate, c_rate, e_rate, first_size, last_size, last_errsize;
+  long long a_rate, c_rate, first_size, last_size, last_errsize;
   long long last_ipos;
   long t0, t1, ts;
   int oldlen;
+  bool status_changed;
 
   int skipbs() const throw() { return skipbs_; }
-  bool sync_sparse_file() throw();
+  bool extend_outfile_size() throw();
   int copy_block( const Block & b, int & copied_size, int & error_size );
   void count_errors() throw();
-  void update_ecode() throw()
-    {
-    if( max_error_rate_ >= 0 && e_rate > max_error_rate_ ) e_code |= 1;
-    if( max_errors_ >= 0 && errors > max_errors_ ) e_code |= 2;
-    }
-  bool too_many_errors() const throw() { return ( e_code != 0 ); }
+  bool too_many_errors() throw()
+    { if( max_errors_ >= 0 && errors > max_errors_ ) e_code |= 2;
+      return ( e_code != 0 ); }
+  void reduce_min_read_rate() throw()
+    { if( min_read_rate_ > 0 ) min_read_rate_ /= 10; }
+  bool slow_read() const throw()
+    { return ( ( min_read_rate_ > 0 && c_rate < min_read_rate_ ) ||
+               ( min_read_rate_ == 0 && c_rate < a_rate / 10 ) ); }
   int copy_and_update( const Block & b, const Sblock::Status st,
                        int & copied_size, int & error_size,
                        const char * const msg, bool & first_post );
@@ -184,14 +207,17 @@ class Rescuebook : public Logbook
   int rsplit_errors();
   int copy_errors();
   int rcopy_errors();
-  void update_status( const long long ipos, const char * const msg = 0,
-                      bool force = false ) throw();
+  void update_status( const bool force = false ) throw();
+  void show_status( const long long ipos, const char * const msg = 0,
+                    const bool force = false ) throw();
 public:
-  Rescuebook( const long long ipos, const long long opos,
-              Domain & dom, const long long isize,
+  Rescuebook( const long long offset, const long long isize,
+              const long long max_error_rate,
+              const long long min_outfile_size,
+              const long long min_read_rate, Domain & dom,
               const char * const iname, const char * const logname,
-              const int cluster, const int hardbs, const int max_error_rate,
-              const int max_errors = -1, const int max_retries = 0,
+              const int cluster, const int hardbs,
+              const int max_errors, const int max_retries,
               const bool complete_only = false,
               const bool new_errors_only = false, const bool nosplit = false,
               const bool retrim = false, const bool sparse = false,
@@ -201,17 +227,18 @@ public:
   };
 
 
-// Defined in ddrescue.cc
+// Defined in io.cc
 //
-const char * format_num( long long num, long long limit = 999999,
-                         const int set_prefix = 0 ) throw();
+bool interrupted() throw();
 void set_signals() throw();
 
 
-// Defined in main.cc
+// Defined in main_common.cc
 //
 extern int verbosity;
-void internal_error( const char * const msg ) __attribute__ ((noreturn));
+void internal_error( const char * const msg ) throw();
 void show_error( const char * const msg,
                  const int errcode = 0, const bool help = false ) throw();
 void write_logfile_header( FILE * const f ) throw();
+const char * format_num( long long num, long long limit = 999999,
+                         const int set_prefix = 0 ) throw();

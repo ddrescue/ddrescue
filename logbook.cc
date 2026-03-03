@@ -1,5 +1,5 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
+    Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
     Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -122,10 +122,13 @@ void show_logfile_error( const char * const filename, const int linenum )
   }
 
 
-bool read_logfile( const char * const name, std::vector< Sblock > & sblock_vector,
+// Returns true if logfile exists and is readable.
+//
+bool read_logfile( const char * const logname,
+                   std::vector< Sblock > & sblock_vector,
                    long long & current_pos, Logbook::Status & current_status )
   {
-  FILE * const f = std::fopen( name, "r" );
+  FILE * const f = std::fopen( logname, "r" );
   if( !f ) return false;
   int linenum = 0;
   sblock_vector.clear();
@@ -139,7 +142,7 @@ bool read_logfile( const char * const name, std::vector< Sblock > & sblock_vecto
       current_status = Logbook::Status( ch );
     else
       {
-      show_logfile_error( name, linenum );
+      show_logfile_error( logname, linenum );
       show_error( "Are you using a logfile from ddrescue 1.5 or older?" );
       std::exit( 2 );
       }
@@ -153,14 +156,14 @@ bool read_logfile( const char * const name, std::vector< Sblock > & sblock_vecto
       if( n == 3 && pos >= 0 && Sblock::isstatus( ch ) &&
           ( size > 0 || size == -1 || ( size == 0 && pos == 0 ) ) )
         {
-        Sblock::Status st = Sblock::Status( ch );
+        const Sblock::Status st = Sblock::Status( ch );
         Sblock sb( pos, size, st ); sb.fix_size();
         if( sblock_vector.size() > 0 && !sb.follows( sblock_vector.back() ) )
-          { show_logfile_error( name, linenum ); std::exit( 2 ); }
+          { show_logfile_error( logname, linenum ); std::exit( 2 ); }
         sblock_vector.push_back( sb );
         }
       else
-        { show_logfile_error( name, linenum ); std::exit( 2 ); }
+        { show_logfile_error( logname, linenum ); std::exit( 2 ); }
       }
     }
   std::fclose( f );
@@ -170,18 +173,19 @@ bool read_logfile( const char * const name, std::vector< Sblock > & sblock_vecto
 } // end namespace
 
 
-Domain::Domain( const char * const name, const long long p, const long long s )
+Domain::Domain( const long long p, const long long s,
+                const char * const logname )
   {
   Block b( p, s ); b.fix_size();
-  if( !name ) { block_vector.push_back( b ); return; }
+  if( !logname || !logname[0] ) { block_vector.push_back( b ); return; }
   std::vector< Sblock > sblock_vector;
   long long current_pos;			// not used
   Logbook::Status current_status;		// not used
-  if( !read_logfile( name, sblock_vector, current_pos, current_status ) )
+  if( !read_logfile( logname, sblock_vector, current_pos, current_status ) )
     {
     char buf[80];
     snprintf( buf, sizeof buf,
-              "Logfile `%s' does not exist or is not readable.", name );
+              "Logfile `%s' does not exist or is not readable.", logname );
     show_error( buf );
     std::exit( 1 );
     }
@@ -210,11 +214,12 @@ void Logbook::split_domain_border_sblocks()
   }
 
 
-Logbook::Logbook( const long long ipos, const long long opos, Domain & dom,
-                  const long long isize, const char * const name,
-                  const int cluster, const int hardbs, const bool complete_only )
-  : offset_( opos - ipos ), current_pos_( 0 ), current_status_( copying ),
-    domain_( dom ), filename_( name ),
+Logbook::Logbook( const long long offset, const long long isize,
+                  Domain & dom, const char * const logname,
+                  const int cluster, const int hardbs,
+                  const bool complete_only, const bool do_not_read )
+  : offset_( offset ), current_pos_( 0 ), logfile_isize_( 0 ),
+    current_status_( copying ), domain_( dom ), filename_( logname ),
     hardbs_( hardbs ), softbs_( cluster * hardbs ),
     final_msg_( 0 ), final_errno_( 0 ), index_( 0 ),
     ul_t1( std::time( 0 ) )
@@ -230,8 +235,10 @@ Logbook::Logbook( const long long ipos, const long long opos, Domain & dom,
     }
 
   if( !domain_.crop_by_file_size( isize ) ) std::exit( 1 );
-  if( filename_ )
-    read_logfile( filename_, sblock_vector, current_pos_, current_status_ );
+  if( filename_ && !do_not_read &&
+      read_logfile( filename_, sblock_vector, current_pos_, current_status_ ) &&
+      sblock_vector.size() )
+    logfile_isize_ = sblock_vector.back().end();
   if( !complete_only ) extend_sblock_vector( sblock_vector, isize );
   else if( sblock_vector.size() )  // limit domain to blocks read from logfile
     {
@@ -268,10 +275,11 @@ void Logbook::compact_sblock_vector()
 // Writes periodically the logfile to disc.
 // Returns false only if update is attempted and fails.
 //
-bool Logbook::update_logfile( const int odes, const bool force )
+bool Logbook::update_logfile( const int odes, const bool force,
+                              const bool retry )
   {
   if( !filename_ ) return true;
-  const int interval = 30 + std::min( 270, sblocks() / 40 );
+  const int interval = 30 + std::min( 270, sblocks() / 38 );
   const long t2 = std::time( 0 );
   if( !force && t2 - ul_t1 < interval ) return true;
   ul_t1 = t2;
@@ -281,41 +289,49 @@ bool Logbook::update_logfile( const int odes, const bool force )
   FILE * const f = std::fopen( filename_, "w" );
   if( f )
     {
-    write_logfile_header( f );
-    std::fprintf( f, "# current_pos  current_status\n" );
-    std::fprintf( f, "0x%08llX     %c\n", current_pos_, current_status_ );
-    std::fprintf( f, "#      pos        size  status\n" );
-    for( unsigned int i = 0; i < sblock_vector.size(); ++i )
-      {
-      const Sblock & sb = sblock_vector[i];
-      std::fprintf( f, "0x%08llX  0x%08llX  %c\n", sb.pos(), sb.size(), sb.status() );
-      }
+    write_logfile( f );
     if( std::fclose( f ) == 0 ) return true;
     }
 
   if( verbosity >= 0 )
     {
     char buf[80];
-    const char * const s =
-      f ? "Error writing logfile %s." : "Error opening logfile %s for writing.";
+    const char * const s = ( f ? "Error writing logfile `%s'" :
+                                 "Error opening logfile `%s' for writing" );
     snprintf( buf, sizeof buf, s, filename_ );
-    std::fprintf( stderr, "\n" );
+    if( retry ) std::fprintf( stderr, "\n" );
     show_error( buf, errno );
-    std::fprintf( stderr, "Fix the problem and press ENTER to retry, or Q+ENTER to abort. " );
-    std::fflush( stderr );
-    while( true )
+    if( retry )
       {
-      const char c = std::tolower( std::fgetc( stdin ) );
-      if( c == '\r' || c == '\n' )
+      std::fprintf( stderr, "Fix the problem and press ENTER to retry, or Q+ENTER to abort. " );
+      std::fflush( stderr );
+      while( true )
         {
-        std::fprintf( stderr, "\n\n\n\n" );
-        return update_logfile( -1, true );
+        const char c = std::tolower( std::fgetc( stdin ) );
+        if( c == '\r' || c == '\n' )
+          {
+          std::fprintf( stderr, "\n\n\n\n" );
+          return update_logfile( -1, true );
+          }
+        if( c == 'q' ) break;
         }
-      if( c == 'q' ) break;
       }
-    std::fprintf( stderr, "\n\n\n\n" );
     }
   return false;
+  }
+
+
+void Logbook::write_logfile( FILE * const f ) const throw()
+  {
+  write_logfile_header( f );
+  std::fprintf( f, "# current_pos  current_status\n" );
+  std::fprintf( f, "0x%08llX     %c\n", current_pos_, current_status_ );
+  std::fprintf( f, "#      pos        size  status\n" );
+  for( unsigned int i = 0; i < sblock_vector.size(); ++i )
+    {
+    const Sblock & sb = sblock_vector[i];
+    std::fprintf( f, "0x%08llX  0x%08llX  %c\n", sb.pos(), sb.size(), sb.status() );
+    }
   }
 
 
@@ -352,7 +368,8 @@ int Logbook::find_index( const long long pos ) const throw()
 // Find chunk from b.pos of size <= b.size and status st.
 // if not found, puts b.size to 0.
 //
-void Logbook::find_chunk( Block & b, const Sblock::Status st ) const
+void Logbook::find_chunk( Block & b, const Sblock::Status st,
+                          const int alignment ) const
   {
   if( b.size() <= 0 ) return;
   if( b.pos() < sblock_vector.front().pos() )
@@ -370,14 +387,15 @@ void Logbook::find_chunk( Block & b, const Sblock::Status st ) const
   if( !sblock_vector[index_].includes( b ) )
     b.crop( sblock_vector[index_] );
   if( b.end() != sblock_vector[index_].end() )
-    b.align_end( hardbs_ );
+    b.align_end( alignment ? alignment : hardbs_ );
   }
 
 
 // Find chunk from b.end backwards of size <= b.size and status st.
 // if not found, puts b.size to 0.
 //
-void Logbook::rfind_chunk( Block & b, const Sblock::Status st ) const
+void Logbook::rfind_chunk( Block & b, const Sblock::Status st,
+                           const int alignment ) const
   {
   if( b.size() <= 0 ) return;
   b.fix_size();
@@ -394,19 +412,39 @@ void Logbook::rfind_chunk( Block & b, const Sblock::Status st ) const
   if( !sblock_vector[index_].includes( b ) )
     b.crop( sblock_vector[index_] );
   if( b.pos() != sblock_vector[index_].pos() )
-    b.align_pos( hardbs_ );
+    b.align_pos( alignment ? alignment : hardbs_ );
   }
 
 
-void Logbook::change_chunk_status( const Block & b, const Sblock::Status st )
+// Returns an adjust value (-1, 0, +1) to keep "errors" updated without
+// having to call count_errors every time.
+//   - - -   -->   - + -   return +1
+//   - - +   -->   - + +   return  0
+//   - + -   -->   - - -   return -1
+//   - + +   -->   - - +   return  0
+//   + - -   -->   + + -   return  0
+//   + - +   -->   + + +   return -1
+//   + + -   -->   + - -   return  0
+//   + + +   -->   + - +   return +1
+//
+int Logbook::change_chunk_status( const Block & b, const Sblock::Status st )
   {
-  if( b.size() <= 0 ) return;
+  if( b.size() <= 0 ) return 0;
   if( !domain_.includes( b ) || find_index( b.pos() ) < 0 ||
       !domain_.includes( sblock_vector[index_] ) )
     internal_error( "can't change status of chunk not in rescue domain" );
   if( !sblock_vector[index_].includes( b ) )
     internal_error( "can't change status of chunk spread over more than 1 block" );
-  if( sblock_vector[index_].status() == st ) return;
+  if( sblock_vector[index_].status() == st ) return 0;
+
+  const bool old_st_good = Sblock::is_good_status( sblock_vector[index_].status() );
+  const bool new_st_good = Sblock::is_good_status( st );
+  bool bl_st_good = ( index_ <= 0 ||
+                      !domain_.includes( sblock_vector[index_-1] ) ||
+                      Sblock::is_good_status( sblock_vector[index_-1].status() ) );
+  bool br_st_good = ( index_ + 1 >= sblocks() ||
+                      !domain_.includes( sblock_vector[index_+1] ) ||
+                      Sblock::is_good_status( sblock_vector[index_+1].status() ) );
   if( sblock_vector[index_].pos() < b.pos() )
     {
     if( sblock_vector[index_].end() == b.end() &&
@@ -416,15 +454,17 @@ void Logbook::change_chunk_status( const Block & b, const Sblock::Status st )
       sblock_vector[index_].inc_size( -b.size() );
       sblock_vector[index_+1].pos( b.pos() );
       sblock_vector[index_+1].inc_size( b.size() );
-      return;
+      return 0;
       }
     insert_sblock( index_, sblock_vector[index_].split( b.pos() ) );
     ++index_;
+    bl_st_good = old_st_good;
     }
   if( sblock_vector[index_].size() > b.size() )
     {
     sblock_vector[index_].pos( b.end() );
     sblock_vector[index_].inc_size( -b.size() );
+    br_st_good = Sblock::is_good_status( sblock_vector[index_].status() );
     if( index_ > 0 && sblock_vector[index_-1].status() == st &&
         domain_.includes( sblock_vector[index_-1] ) )
       sblock_vector[index_-1].inc_size( b.size() );
@@ -447,4 +487,24 @@ void Logbook::change_chunk_status( const Block & b, const Sblock::Status st )
       erase_sblock( index_ + 1 );
       }
     }
+  int retval = 0;
+  if( new_st_good != old_st_good && bl_st_good == br_st_good )
+    { if( old_st_good == bl_st_good ) retval = +1; else retval = -1; }
+  return retval;
+  }
+
+
+const char * Logbook::status_name( const Logbook::Status st ) throw()
+  {
+  switch( st )
+    {
+    case copying:    return "copying";
+    case trimming:   return "trimming";
+    case splitting:  return "splitting";
+    case retrying:   return "retrying";
+    case filling:    return "filling";
+    case generating: return "generating";
+    case finished:   return "finished";
+    }
+  return "unknown";			// should not be reached
   }
