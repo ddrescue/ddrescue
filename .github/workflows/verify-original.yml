@@ -46,7 +46,7 @@ jobs:
           rm -rf .github
           
           # Compare files
-          diff -r -x '.git' ddrescue-${{ matrix.version }} . || {
+          diff -r -x '.git' -x 'ddrescue-*' -x '*.tar.lz' ddrescue-${{ matrix.version }} . || {
             echo "ERROR: Source files do not match original!"
             exit 1
           }
@@ -109,7 +109,7 @@ jobs:
           VERSION=${{ steps.latest.outputs.version }}
           VERSION_NUM=${VERSION#v}
           
-          diff -r -x '.git' ddrescue-${VERSION_NUM} . || {
+          diff -r -x '.git' -x 'ddrescue-*' -x '*.tar.lz' ddrescue-${VERSION_NUM} . || {
             echo "ERROR: Latest version does not match original!"
             exit 1
           }
