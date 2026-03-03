@@ -1,3 +1,64 @@
+2014-10-03  Antonio Diaz Diaz  <antonio@gnu.org>
+
+	* Version 1.19 released.
+	* Fixed a race condition at start of run with '--timeout=0'.
+	* Added new option '-P, --data-preview'.
+	* Added new option '-u, --unidirectional'.
+	* Added new option '-X, --exit-on-error'.
+	* Added new option '--ask' to ask for user confirmation.
+	* Added new option '--cpass' to select passes during copying phase.
+	* Added new option '--pause' to insert a pause between passes.
+	* Removed option '-l, --logfile-size'.
+	* Skip on the first error during the copying phase.
+	* rescuebook.cc: Trimming done in one pass, may be run in reverse.
+	* The splitting phase has been replaced by a scraping phase.
+	* Changed long name of option '-n' to '--no-scrape'.
+	* rescuebook.cc: Alternate direction of passes during retrying phase.
+	* Show ATA model and serial number with '--ask' or '-vv' on Linux.
+	* configure: Added new option '--enable-linux'.
+	* New files linux.h linux.cc.
+	* License changed to GPL version 2 or later.
+
+2014-06-10  Antonio Diaz Diaz  <antonio@gnu.org>
+
+	* Version 1.18.1 released.
+	* ddrescuelog.cc (do_logic_ops): Fixed 'or' and 'xor'.
+	* Added new option '-H, --test-mode' to simulate read errors.
+	* Added new option '-L, --loose-domain' to ddrescue and ddrescuelog.
+	* Added new option '-N, --no-trim' to disable trimming of
+	  damaged areas.
+	* Added new option '-O, --reopen-on-error'.
+	* Added new options '-1, --log-rates', and '-2, --log-reads'.
+	* Extended '-K, --skip-size' with maximum and disable values.
+	* Changed long name of option '-r' to '--retry-passes'.
+	* Changed short name of option '--generate-mode' to '-G'.
+	* Default value of option '-l, --logfile-size' increased to 10000.
+	* If interrupted, ddrescue terminates by raising the signal received.
+	* rescuebook.cc (copy_non_tried): Do not mark skipped blocks as
+	  non-trimmed. Try them in additional passes (before trimming).
+	* rescuebook.cc: Limit the copying phase to 3 passes.
+	* rescuebook.cc: Alternate direction of passes during copying phase.
+	* rescuebook.cc: Smallest blocks are trimmed first.
+	* rescuebook.cc (split_errors): Read largest first if logfile full.
+	* Improved speed when using option '-m, --domain-logfile'.
+	* io.cc (show_status): Show the current total run time.
+	* rescuebook.cc: Show pass number and direction during copying.
+	* rescuebook.cc (show_status): Show block pos instead of current_pos.
+	* main.cc: Show "an unknown number of bytes" for unknown isize.
+	* Added option '-B, --binary-prefixes' to ddrescuelog.
+	* Added new option '-C, --complete-logfile' to ddrescuelog.
+	* Added new option '-P, --compare-as-domain' to ddrescuelog.
+	* Improved speed of logic operations in ddrescuelog.
+	* rescuebook.cc (Rescuebook::do_rescue): Show warning when domain
+	  is smaller than logfile.
+	* ddrescuelog.cc (do_show_status): Show logfile and domain extents
+	  when domain is smaller than logfile.
+	* block.h: Class Block now forces the invariant by itself.
+	* Code reorganization. New class 'Logfile'.
+	* Added status message to rescue logfile.
+	* Many improvements to documentation.
+	* ddrescue.texinfo: Renamed to ddrescue.texi.
+
 2013-07-09  Antonio Diaz Diaz  <antonio@gnu.org>
 
 	* Version 1.17 released.
@@ -17,7 +78,7 @@
 	* rescuebook.cc: Mark failed blocks with 1 sector as bad-sector.
 	* logbook.cc (extend_sblock_vector): Remove last block of
 	  logfile if it starts at isize and is not marked as finished.
-	* io.cc (show_status,update_rates): Detect a jump back in time
+	* io.cc (show_status, update_rates): Detect a jump back in time
 	  and adjust status.
 	* ddrescue.h (slow_read): Return false for the first 10 seconds.
 	* io.cc (show_status) Leave cursor after message so that ^C does
@@ -154,7 +215,7 @@
 	* Version 1.6 released.
 	* Code reorganization. New classes 'Fillbook' and 'Rescuebook'.
 	* logbook.cc (copy_non_tried): Added new variable 'skip_counter'.
-	* Added new pass that trims error areas backward before splitting.
+	* Added new pass that trims error areas backwards before splitting.
 	* Added support for sparse output files.
 	* Blocks longer than hardbs are now split at sector boundaries.
 	* Added new option '-F, --fill'.
@@ -200,7 +261,7 @@
 	* Version 1.1 released.
 	* 'iobuf' is aligned to the sector size for use with raw devices.
 	* Added a small tutorial to the info file.
-	* Added two missing headers.
+	* Added two missing #includes.
 
 2005-06-07  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
@@ -272,8 +333,7 @@
 	* Version 0.1 released.
 
 
-Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013
-Antonio Diaz Diaz.
+Copyright (C) 2004-2014 Antonio Diaz Diaz.
 
 This file is a collection of facts, and thus it is not copyrightable,
 but just in case, you have unlimited permission to copy, distribute and

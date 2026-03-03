@@ -1,10 +1,9 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012,
-    2013 Antonio Diaz Diaz.
+    Copyright (C) 2004-2014 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
+    the Free Software Foundation, either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -18,15 +17,15 @@
 
 namespace {
 
-const char * const program_year = "2013";
+const char * const program_year = "2014";
 std::string command_line;
 
 
 void show_version()
   {
-  std::printf( "%s %s\n", Program_name, PROGVERSION );
+  std::printf( "GNU %s %s\n", program_name, PROGVERSION );
   std::printf( "Copyright (C) %s Antonio Diaz Diaz.\n", program_year );
-  std::printf( "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>\n"
+  std::printf( "License GPLv2+: GNU GPL version 2 or later <http://gnu.org/licenses/gpl.html>\n"
                "This is free software: you are free to change and redistribute it.\n"
                "There is NO WARRANTY, to the extent permitted by law.\n" );
   }
@@ -34,10 +33,10 @@ void show_version()
 
 long long getnum( const char * const ptr, const int hardbs,
                   const long long min = LLONG_MIN + 1,
-                  const long long max = LLONG_MAX )
+                  const long long max = LLONG_MAX, const bool comma = false )
   {
   errno = 0;
-  char *tail;
+  char * tail;
   long long result = strtoll( ptr, &tail, 0 );
   if( tail == ptr )
     {
@@ -53,6 +52,7 @@ long long getnum( const char * const ptr, const int hardbs,
     switch( tail[0] )
       {
       case ' ': break;
+      case ',': if( !comma ) { bad_multiplier = true; } break;
       case 'b':
       case 's': if( hardbs > 0 ) { factor = hardbs; exponent = 1; }
                 else bad_multiplier = true;
@@ -118,14 +118,27 @@ void set_mode( Mode & program_mode, const Mode new_mode )
   }
 
 
-void set_name( const char ** domain_logfile_name, const char * new_name )
+void set_name( const char ** name, const char * new_name, const char opt )
   {
-  if( *domain_logfile_name )
+  if( *name )
     {
-    show_error( "Only one domain logfile can be specified.", 0, true );
+    std::string msg( "Option '- ' can be specified only once." );
+    msg[9] = opt;
+    show_error( msg.c_str(), 0, true );
     std::exit( 1 );
     }
-  *domain_logfile_name = new_name;
+  *name = new_name;
+  }
+
+
+const char * get_timestamp( const long t = 0 )
+  {
+  static char buf[80];
+  const time_t tt = t ? t : std::time( 0 );
+  const struct tm * const tm = std::localtime( &tt );
+  if( !tm || std::strftime( buf, sizeof buf, "%Y-%m-%d %H:%M:%S", tm ) == 0 )
+    buf[0] = 0;
+  return buf;
   }
 
 } // end namespace
@@ -155,16 +168,70 @@ void show_error( const char * const msg, const int errcode, const bool help )
 void internal_error( const char * const msg )
   {
   if( verbosity >= 0 )
-    std::fprintf( stderr, "%s: internal error: %s.\n", program_name, msg );
+    std::fprintf( stderr, "%s: internal error: %s\n", program_name, msg );
   std::exit( 3 );
   }
 
 
-void write_logfile_header( FILE * const f )
+int empty_domain() { show_error( "Empty domain." ); return 0; }
+
+
+int not_readable( const char * const logname )
   {
-  std::fprintf( f, "# Rescue Logfile. Created by %s version %s\n",
-                Program_name, PROGVERSION );
-  std::fprintf( f, "# Command line: %s\n", command_line.c_str() );
+  char buf[80];
+  snprintf( buf, sizeof buf,
+            "Logfile '%s' does not exist or is not readable.", logname );
+  show_error( buf );
+  return 1;
+  }
+
+
+int not_writable( const char * const logname )
+  {
+  char buf[80];
+  snprintf( buf, sizeof buf, "Logfile '%s' is not writable.", logname );
+  show_error( buf );
+  return 1;
+  }
+
+
+long initial_time()
+  {
+  static long initial_time_ = 0;
+
+  if( initial_time_ == 0 ) initial_time_ = std::time( 0 );
+  return initial_time_;
+  }
+
+
+bool write_logfile_header( FILE * const f, const char * const logtype )
+  {
+  static std::string timestamp;
+
+  if( timestamp.empty() ) timestamp = get_timestamp( initial_time() );
+  return ( std::fprintf( f, "# %s Logfile. Created by %s version %s\n"
+                            "# Command line: %s\n"
+                            "# Start time:   %s\n",
+           logtype, Program_name, PROGVERSION, command_line.c_str(),
+           timestamp.c_str() ) >= 0 );
+  }
+
+
+bool write_timestamp( FILE * const f )
+  {
+  const char * const timestamp = get_timestamp();
+
+  return ( !timestamp || !timestamp[0] ||
+           std::fprintf( f, "# Current time: %s\n", timestamp ) >= 0 );
+  }
+
+
+bool write_final_timestamp( FILE * const f )
+  {
+  static std::string timestamp;
+
+  if( timestamp.empty() ) timestamp = get_timestamp();
+  return ( std::fprintf( f, "# End time: %s\n", timestamp.c_str() ) >= 0 );
   }
 
 
@@ -175,17 +242,20 @@ const char * format_num( long long num, long long limit,
     { "k", "M", "G", "T", "P", "E", "Z", "Y" };
   const char * const binary_prefix[8] =
     { "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi", "Yi" };
+  enum { buffers = 8, bufsize = 16 };
+  static char buffer[buffers][bufsize];	// circle of static buffers for printf
+  static int current = 0;
   static bool si = true;
-  static char buf[16];
 
   if( set_prefix ) si = ( set_prefix > 0 );
-  const int factor = ( si ? 1000 : 1024 );
-  const char * const * prefix = ( si ? si_prefix : binary_prefix );
+  const int factor = si ? 1000 : 1024;
+  char * const buf = buffer[current++]; current %= buffers;
+  const char * const * prefix = si ? si_prefix : binary_prefix;
   const char * p = "";
   limit = std::max( 999LL, std::min( 999999LL, limit ) );
 
   for( int i = 0; i < 8 && llabs( num ) > limit; ++i )
     { num /= factor; p = prefix[i]; }
-  snprintf( buf, sizeof buf, "%lld %s", num, p );
+  snprintf( buf, bufsize, "%lld %s", num, p );
   return buf;
   }

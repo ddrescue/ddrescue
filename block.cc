@@ -1,10 +1,9 @@
 /*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012,
-    2013 Antonio Diaz Diaz.
+    Copyright (C) 2004-2014 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
+    the Free Software Foundation, either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -21,12 +20,12 @@
 #include <algorithm>
 #include <climits>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 #include <stdint.h>
 
 #include "block.h"
-#include "ddrescue.h"
 
 
 // Align pos to next boundary if size is big enough
@@ -66,10 +65,19 @@ bool Block::join( const Block & b )
   {
   if( this->follows( b ) ) pos_ = b.pos_;
   else if( !b.follows( *this ) ) return false;
+  if( b.size_ > LLONG_MAX - end() )
+    internal_error( "size overflow joining two Blocks." );
   size_ += b.size_;
-  if( size_ < 0 || size_ > LLONG_MAX - pos_ )
-    internal_error( "size overflow joining two Blocks" );
   return true;
+  }
+
+
+// shift the border of two consecutive Blocks
+void Block::shift( Block & b, const long long pos )
+  {
+  if( end() != b.pos_ || pos <= pos_ || pos >= b.end() )
+    internal_error( "bad argument shifting the border of two Blocks." );
+  b.size_ = b.end() - pos; b.pos_ = pos; size_ = pos - pos_;
   }
 
 
@@ -86,28 +94,45 @@ Block Block::split( long long pos, const int hardbs )
   }
 
 
-void Domain::crop( const Block & b )
+Domain::Domain( const long long p, const long long s,
+                const char * const logname, const bool loose )
   {
-  for( unsigned i = block_vector.size(); i > 0; )
+  const Block b( p, s );
+  if( !logname || !logname[0] ) { block_vector.push_back( b ); return; }
+  Logfile logfile( logname );
+  if( !logfile.read_logfile( loose ? '?' : 0 ) )
     {
-    block_vector[--i].crop( b );
-    if( block_vector[i].size() <= 0 )
-      block_vector.erase( block_vector.begin() + i );
+    char buf[80];
+    snprintf( buf, sizeof buf,
+              "Logfile '%s' does not exist or is not readable.", logname );
+    show_error( buf );
+    std::exit( 1 );
     }
-  if( block_vector.size() == 0 ) block_vector.push_back( Block( 0, 0 ) );
+  logfile.compact_sblock_vector();
+  for( int i = 0; i < logfile.sblocks(); ++i )
+    {
+    const Sblock & sb = logfile.sblock( i );
+    if( sb.status() == Sblock::finished ) block_vector.push_back( sb );
+    }
+  if( block_vector.empty() ) block_vector.push_back( Block( 0, 0 ) );
+  else this->crop( b );
   }
 
 
-void Domain::crop_by_file_size( const long long end )
+void Domain::crop( const Block & b )
   {
-  unsigned i = block_vector.size();
-  while( i > 0 && block_vector[i-1].pos() >= end ) --i;
-  if( i == 0 )
-    block_vector[0].assign( 0, 0 );
-  else
-    {
-    Block & b = block_vector[--i];
-    if( b.includes( end ) ) b.size( end - b.pos() );
-    }
-  block_vector.erase( block_vector.begin() + i + 1, block_vector.end() );
+  unsigned r = block_vector.size();
+  while( r > 0 && b < block_vector[r-1] ) --r;
+  if( r > 0 ) block_vector[r-1].crop( b );
+  if( r <= 0 || block_vector[r-1].size() <= 0 )	// no block overlaps b
+    { block_vector.clear(); block_vector.push_back( Block( 0, 0 ) ); return; }
+  if( r < block_vector.size() )			// remove blocks beyond b
+    block_vector.erase( block_vector.begin() + r, block_vector.end() );
+  if( b.pos() <= 0 ) return;
+  --r;		// block_vector[r] is now the last non-cropped-out block
+  unsigned l = 0;
+  while( l < r && block_vector[l] < b ) ++l;
+  if( l < r ) block_vector[l].crop( b );	// crop block overlapping b
+  if( l > 0 )					// remove blocks before b
+    block_vector.erase( block_vector.begin(), block_vector.begin() + l );
   }
