@@ -1,18 +1,18 @@
-/*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2020 Antonio Diaz Diaz.
+/* GNU ddrescue - Data recovery tool
+   Copyright (C) 2004-2022 Antonio Diaz Diaz.
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 2 of the License, or
-    (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 2 of the License, or
+   (at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #define _FILE_OFFSET_BITS 64
@@ -41,9 +41,9 @@ int my_fgetc( FILE * const f, const bool allow_comment = true )
   }
 
 
-// Read a line discarding comments, leading whitespace and blank lines.
-// Returns 0 if at EOF.
-//
+/* Read a line discarding comments, leading whitespace, and blank lines.
+   Return 0 if at EOF.
+*/
 const char * my_fgets( FILE * const f, int & linenum )
   {
   const int maxlen = 127;
@@ -68,11 +68,82 @@ const char * my_fgets( FILE * const f, int & linenum )
   }
 
 
-void show_mapfile_error( const char * const mapname, const int linenum )
+void show_mapfile_error( const char * const pname, const char * const msg,
+                          const int linenum )
   {
   char buf[80];
-  snprintf( buf, sizeof buf, "error in mapfile '%s', line %d.", mapname, linenum );
-  show_error( buf );
+  snprintf( buf, sizeof buf, "Error in mapfile, line %d: %s", linenum, msg );
+  show_file_error( pname, buf );
+  }
+
+
+/* Insert sb in its place or merge it with overlapping blocks of same status.
+   Return false if sb overlaps with blocks of different status.
+*/
+bool insert_sblock_sorted( std::vector< Sblock > & sblock_vector,
+                           const Sblock & sb )
+  {
+  if( sblock_vector.empty() || sb.pos() >= sblock_vector.back().end() )
+    { sblock_vector.push_back( sb ); return true; }	// append at the end
+  const long long pos = sb.pos();
+  const long long end = sb.end();
+  for( unsigned long i = 0; i < sblock_vector.size(); ++i )
+    if( end <= sblock_vector[i].pos() )		// maybe insert sb before i
+      {
+      if( i == 0 || pos >= sblock_vector[i-1].end() )
+        { sblock_vector.insert( sblock_vector.begin() + i, sb ); return true; }
+      break;
+      }
+  for( unsigned long i = 0; i < sblock_vector.size(); ++i )
+    if( sblock_vector[i].overlaps( sb ) )
+      {
+      unsigned long j = i;	// indexes of first/last overlapping blocks
+      while( j + 1 < sblock_vector.size() && sblock_vector[j+1].overlaps( sb ) )
+        ++j;
+      for( unsigned long k = i; k <= j; ++k )
+        if( sblock_vector[k].status() != sb.status() ) goto fail;
+      const long long new_pos = std::min( pos, sblock_vector[i].pos() );
+      const long long new_end = std::max( end, sblock_vector[j].end() );
+      sblock_vector[i].assign( new_pos, new_end - new_pos );
+      if( i < j ) sblock_vector.erase( sblock_vector.begin() + i + 1,
+                                       sblock_vector.begin() + j + 1 );
+      return true;	// sb successfully merged with overlapping blocks
+      }
+fail:
+  return false;
+  }
+
+
+void fill_gaps_in_sblock_vector( std::vector< Sblock > & sblock_vector,
+                                 const Sblock::Status st )
+  {
+  if( sblock_vector.empty() ) return;
+  std::vector< Sblock > new_vector;
+  bool gap = ( sblock_vector[0].pos() > 0 );
+  if( gap ) new_vector.push_back( Sblock( 0, sblock_vector[0].pos(), st ) );
+  else for( unsigned long i = 1; i < sblock_vector.size(); ++i )
+         if( sblock_vector[i-1].end() != sblock_vector[i].pos() )
+           { gap = true; break; }
+  if( gap )
+    {
+    new_vector.push_back( sblock_vector[0] );
+    for( unsigned long i = 1; i < sblock_vector.size(); ++i )
+      {
+      if( sblock_vector[i].pos() > new_vector.back().end() )
+        new_vector.push_back( Sblock( new_vector.back().end(),
+                   sblock_vector[i].pos() - new_vector.back().end(), st ) );
+      new_vector.push_back( sblock_vector[i] );
+      }
+    sblock_vector.swap( new_vector );
+    }
+  /* Enlarge mapfile to maximum size to ease comparison with other mapfile.
+     Maybe this should be done only if requested. */
+  if( !sblock_vector.back().full() )
+    {
+    Sblock & back = sblock_vector.back();
+    if( back.status() == st ) back.size( -1 );
+//    else sblock_vector.push_back( Sblock( back.end(), -1, st ) );
+    }
   }
 
 } // end namespace
@@ -174,19 +245,19 @@ void Mapfile::extend_sblock_vector( const long long insize )
   }
 
 
-void Mapfile::shift_blocks( const long long offset )
+void Mapfile::shift_blocks( const long long offset, const Sblock::Status st )
   {
   if( sblock_vector.empty() ) return;
   if( offset > 0 )
     {
-    if( sblock_vector.front().status() == Sblock::non_tried )
+    if( sblock_vector.front().status() == st )
       sblock_vector.front().enlarge( offset );
     else
-      insert_sblock( 0, Sblock( 0, offset, Sblock::non_tried ) );
+      insert_sblock( 0, Sblock( 0, offset, st ) );
     for( unsigned long i = 1; i < sblock_vector.size(); ++i )
       {
       sblock_vector[i].shift( offset );
-      if( sblock_vector[i].size() <= 0 )
+      if( sblock_vector[i].size() <= 0 )	// remove blocks past new end
         { sblock_vector.erase( sblock_vector.begin() + i, sblock_vector.end() );
           break; }
       }
@@ -196,7 +267,7 @@ void Mapfile::shift_blocks( const long long offset )
     for( unsigned long i = 0; i < sblock_vector.size(); ++i )
       if( sblock_vector[i].end() + offset > 0 )
         {
-        if( i > 0 )
+        if( i > 0 )			// remove blocks before new beginning
           sblock_vector.erase( sblock_vector.begin(), sblock_vector.begin() + i );
         break;
         }
@@ -206,9 +277,9 @@ void Mapfile::shift_blocks( const long long offset )
   }
 
 
-// Returns false only if truncation would remove finished blocks and
-// force is false.
-//
+/* Return false only if truncation would remove finished blocks and
+   force is false.
+*/
 bool Mapfile::truncate_vector( const long long end, const bool force )
   {
   unsigned long i = sblock_vector.size();
@@ -235,15 +306,16 @@ bool Mapfile::truncate_vector( const long long end, const bool force )
   }
 
 
-// Returns true if mapfile exists and is readable.
-// Fills the gaps if 'default_sblock_status' is a valid status character.
-//
+/* Return true if mapfile exists and is readable.
+   Sort the blocks and fill the gaps if 'default_sblock_status' is a valid
+   status character.
+*/
 bool Mapfile::read_mapfile( const int default_sblock_status, const bool ro )
   {
   FILE * f = 0;
   errno = 0;
   read_only_ = ro;
-  if( ro && std::strcmp( filename_, "-" ) == 0 ) f = stdin;
+  if( std::strcmp( filename_, "-" ) == 0 ) { f = stdin; read_only_ = true; }
   else if( ro || ( !(f = std::fopen( filename_, "r+" )) && errno != ENOENT ) )
     { f = std::fopen( filename_, "r" ); read_only_ = true; }
   if( !f ) return false;
@@ -262,7 +334,8 @@ bool Mapfile::read_mapfile( const int default_sblock_status, const bool ro )
         current_pass_ >= 1 )
       current_status_ = Status( ch );
     else
-      { show_mapfile_error( filename_, linenum ); std::exit( 2 ); }
+      { show_mapfile_error( pname(), "Bad or missing status line.", linenum );
+        std::exit( 2 ); }
 
     while( true )
       {
@@ -274,25 +347,25 @@ bool Mapfile::read_mapfile( const int default_sblock_status, const bool ro )
           ( size > 0 || ( size == 0 && pos == 0 ) ) )
         {
         const Sblock sb( pos, size, Sblock::Status( ch ) );
-        const long long end = sblock_vector.size() ?
-                              sblock_vector.back().end() : 0;
-        if( sb.pos() != end )
-          {
-          if( loose && sb.pos() > end )
-            { const Sblock sb2( end, sb.pos() - end,
-                                Sblock::Status( default_sblock_status ) );
-              sblock_vector.push_back( sb2 ); }
-          else if( end > 0 )
-            { show_mapfile_error( filename_, linenum ); std::exit( 2 ); }
-          }
-        sblock_vector.push_back( sb );
+        if( sblock_vector.empty() || sb.pos() == sblock_vector.back().end() )
+          { sblock_vector.push_back( sb ); continue; }
+        if( loose )
+          { if( insert_sblock_sorted( sblock_vector, sb ) ) continue;
+            show_mapfile_error( pname(), "Blocks of different status overlap.",
+                                linenum ); }
+        else
+          show_mapfile_error( pname(), "Blocks are not contiguous.", linenum );
         }
       else
-        { show_mapfile_error( filename_, linenum ); std::exit( 2 ); }
+        show_mapfile_error( pname(), "Bad block line in list.", linenum );
+      std::exit( 2 );
       }
+    if( loose )
+      fill_gaps_in_sblock_vector( sblock_vector,
+                                  Sblock::Status( default_sblock_status ) );
     }
   if( std::ferror( f ) || !std::feof( f ) || std::fclose( f ) != 0 )
-    { show_mapfile_error( filename_, linenum ); std::exit( 2 ); }
+    { show_mapfile_error( pname(), "Read error.", linenum ); std::exit( 1 ); }
   return true;
   }
 
@@ -302,31 +375,35 @@ bool Mapfile::write_mapfile( FILE * f, const bool timestamp,
                              const Domain * const annotate_domainp ) const
   {
   const bool f_given = ( f != 0 );
+  bool error = false;
 
   if( !f && !filename_ ) return false;
   if( !f ) { f = std::fopen( filename_, "w" ); if( !f ) return false; }
-  write_file_header( f, "Mapfile" );
-  if( timestamp ) write_timestamp( f );
-  if( current_msg.size() ) std::fprintf( f, "# %s\n", current_msg.c_str() );
+  if( !write_file_header( f, "Mapfile" ) ) error = true;
+  if( timestamp && !write_timestamp( f ) ) error = true;
+  if( current_msg.size() && std::fprintf( f, "# %s\n", current_msg.c_str() ) < 0 )
+    error = true;
   char buf[80] = { 0 };		// comment
-  if( annotate_domainp )
-    snprintf( buf, sizeof buf, "\t#  %sB", format_num( current_pos_ ) );
-  std::fprintf( f, "# current_pos  current_status  current_pass\n"
-                   "0x%08llX     %c               %d%s\n"
-                   "#      pos        size  status\n",
-                current_pos_, current_status_, current_pass_, buf );
+  if( annotate_domainp &&
+      snprintf( buf, sizeof buf, "\t#  %sB", format_num( current_pos_ ) ) < 0 )
+    error = true;
+  if( std::fprintf( f, "# current_pos  current_status  current_pass\n"
+                       "0x%08llX     %c               %d%s\n"
+                       "#      pos        size  status\n",
+                    current_pos_, current_status_, current_pass_, buf ) < 0 )
+    error = true;
   for( unsigned long i = 0; i < sblock_vector.size(); ++i )
     {
     const Sblock & sb = sblock_vector[i];
-    if( annotate_domainp && annotate_domainp->includes( sb ) )
-      snprintf( buf, sizeof buf, "\t#  %9sB  %9s%c", format_num( sb.pos() ),
-                format_num( sb.size() ), ( sb.size() > 999999 ) ? 'B' : ' ' );
-    else buf[0] = 0;
-    std::fprintf( f, "0x%08llX  0x%08llX  %c%s\n",
-                  sb.pos(), sb.size(), sb.status(), buf );
+    if( !annotate_domainp || !annotate_domainp->includes( sb ) ) buf[0] = 0;
+    else if( snprintf( buf, sizeof buf, "\t#  %9sB  %9s%c", format_num( sb.pos() ),
+             format_num( sb.size() ), ( sb.size() > 999999 ) ? 'B' : ' ' ) < 0 )
+      error = true;
+    if( std::fprintf( f, "0x%08llX  0x%08llX  %c%s\n",
+                      sb.pos(), sb.size(), sb.status(), buf ) < 0 ) error = true;
     }
   if( mf_sync ) fsync( fileno( f ) );
-  return ( f_given || std::fclose( f ) == 0 );
+  return ( f_given || std::fclose( f ) == 0 ) && !error;
   }
 
 
@@ -336,6 +413,14 @@ bool Mapfile::blank() const
     if( sblock_vector[i].status() != Sblock::non_tried )
       return false;
   return true;
+  }
+
+
+const char * Mapfile::pname( const bool in ) const
+  {
+  if( !filename_ || !filename_[0] || std::strcmp( filename_, "-" ) == 0 )
+    return in ? "(stdin)" : "(stdout)";
+  return filename_;
   }
 
 
@@ -410,12 +495,12 @@ long Mapfile::find_index( const long long pos ) const
   }
 
 
-// Find chunk from b.pos forwards of size <= b.size and status st.
-// if unfinished is true, find also any chunk not marked as finished.
-// If not found, or if after_finished is true and none of the blocks
-// found follows a finished block, put b.size to 0.
-// If at least one block of status st is found, return true.
-//
+/* Find chunk from b.pos forwards of size <= b.size and status st.
+   if unfinished is true, find also any chunk not marked as finished.
+   If not found, or if after_finished is true and none of the blocks
+   found follows a finished block, put b.size to 0.
+   If at least one block of status st is found, return true.
+*/
 bool Mapfile::find_chunk( Block & b, const Sblock::Status st,
                           const Domain & domain, const int alignment,
                           const bool after_finished,
@@ -450,11 +535,11 @@ bool Mapfile::find_chunk( Block & b, const Sblock::Status st,
   }
 
 
-// Find chunk from b.end backwards of size <= b.size and status st.
-// If not found, or if before_finished is true and none of the blocks
-// found precedes a finished block, put b.size to 0.
-// If at least one block of status st is found, return true.
-//
+/* Find chunk from b.end backwards of size <= b.size and status st.
+   If not found, or if before_finished is true and none of the blocks
+   found precedes a finished block, put b.size to 0.
+   If at least one block of status st is found, return true.
+*/
 bool Mapfile::rfind_chunk( Block & b, const Sblock::Status st,
                            const Domain & domain, const int alignment,
                            const bool before_finished ) const
@@ -484,16 +569,16 @@ bool Mapfile::rfind_chunk( Block & b, const Sblock::Status st,
   }
 
 
-// Returns an adjust value (-1, 0, +1) to keep 'bad_areas' updated.
-//   - - -   -->   - + -   return +1
-//   - - +   -->   - + +   return  0
-//   - + -   -->   - - -   return -1
-//   - + +   -->   - - +   return  0
-//   + - -   -->   + + -   return  0
-//   + - +   -->   + + +   return -1
-//   + + -   -->   + - -   return  0
-//   + + +   -->   + - +   return +1
-//
+/* Return an adjust value (-1, 0, +1) to keep 'bad_areas' updated.
+   - - -   -->   - + -   return +1
+   - - +   -->   - + +   return  0
+   - + -   -->   - - -   return -1
+   - + +   -->   - - +   return  0
+   + - -   -->   + + -   return  0
+   + - +   -->   + + +   return -1
+   + + -   -->   + - -   return  0
+   + + +   -->   + - +   return +1
+*/
 int Mapfile::change_chunk_status( const Block & b, const Sblock::Status st,
                                   const Domain & domain,
                                   Sblock::Status * const old_stp )

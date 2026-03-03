@@ -1,25 +1,25 @@
-/*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2020 Antonio Diaz Diaz.
+/* GNU ddrescue - Data recovery tool
+   Copyright (C) 2004-2022 Antonio Diaz Diaz.
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 2 of the License, or
-    (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 2 of the License, or
+   (at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 int verbosity = 0;
 
 namespace {
 
-const char * const program_year = "2020";
+const char * const program_year = "2022";
 std::string command_line;
 
 
@@ -35,17 +35,19 @@ void show_version()
 
 // Recognized formats: <num>[YZEPTGM][i][Bs], <num>k[Bs], <num>Ki[Bs]
 //
-long long getnum( const char * const ptr, const int hardbs,
-                  const long long llimit = -LLONG_MAX,
+long long getnum( const char * const arg, const char * const option_name,
+                  const int hardbs, const long long llimit = -LLONG_MAX,
                   const long long ulimit = LLONG_MAX,
                   const char ** const tailp = 0 )
   {
   char * tail;
   errno = 0;
-  long long result = strtoll( ptr, &tail, 0 );
-  if( tail == ptr )
+  long long result = strtoll( arg, &tail, 0 );
+  if( tail == arg )
     {
-    show_error( "Bad or missing numerical argument.", 0, true );
+    if( verbosity >= 0 )
+      std::fprintf( stderr, "%s: Bad or missing numerical argument in "
+                    "option '%s'.\n", program_name, option_name );
     std::exit( 1 );
     }
 
@@ -76,7 +78,9 @@ long long getnum( const char * const ptr, const int hardbs,
     if( exponent < 0 || ( usuf == 's' && hardbs <= 0 ) ||
         ( !tailp && tail[0] != 0 ) )
       {
-      show_error( "Bad multiplier in numerical argument.", 0, true );
+      if( verbosity >= 0 )
+        std::fprintf( stderr, "%s: Bad multiplier in numerical argument of "
+                      "option '%s'.\n", program_name, option_name );
       std::exit( 1 );
       }
     for( int i = 0; i < exponent; ++i )
@@ -93,7 +97,10 @@ long long getnum( const char * const ptr, const int hardbs,
   if( !errno && ( result < llimit || result > ulimit ) ) errno = ERANGE;
   if( errno )
     {
-    show_error( "Numerical argument out of limits." );
+    if( verbosity >= 0 )
+      std::fprintf( stderr, "%s: Numerical argument out of limits [%s,%s] "
+                    "in option '%s'.\n", program_name, format_num3( llimit ),
+                    format_num3( ulimit ), option_name );
     std::exit( 1 );
     }
   if( tailp ) *tailp = tail;
@@ -101,7 +108,7 @@ long long getnum( const char * const ptr, const int hardbs,
   }
 
 
-bool check_types( std::string & types, const char * const opt_name,
+bool check_types( std::string & types, const char * const option_name,
                   const bool allow_l = false )
   {
   bool error = false;
@@ -111,14 +118,13 @@ bool check_types( std::string & types, const char * const opt_name,
     if( types[--i] == 'l' )
       { if( !allow_l ) { error = true; break; }
         write_location_data = true; types.erase( i, 1 ); continue; }
-    if( !Sblock::isstatus( types[i] ) )
-      { error = true; break; }
+    if( !Sblock::isstatus( types[i] ) ) { error = true; break; }
     }
-  if( types.empty() || error )
+  if( types.empty() || error )			// types must not be empty
     {
-    char buf[80];
-    snprintf( buf, sizeof buf, "Invalid type for option '%s'.", opt_name );
-    show_error( buf, 0, true );
+    if( verbosity >= 0 )
+      std::fprintf( stderr, "%s: Invalid type in argument of option '%s'.\n",
+                    program_name, option_name );
     std::exit( 1 );
     }
   return write_location_data;
@@ -136,13 +142,14 @@ void set_mode( Mode & program_mode, const Mode new_mode )
   }
 
 
-void set_name( const char ** name, const char * new_name, const char opt )
+void set_name( const char ** name, const char * new_name,
+               const char * const option_name )
   {
   if( *name )
     {
-    std::string msg( "Option '- ' can be specified only once." );
-    msg[9] = opt;
-    show_error( msg.c_str(), 0, true );
+    if( verbosity >= 0 )
+      std::fprintf( stderr, "%s: Option '%s' can be specified only once.\n",
+                    program_name, option_name );
     std::exit( 1 );
     }
   *name = new_name;
@@ -175,6 +182,16 @@ void show_error( const char * const msg, const int errcode, const bool help )
   }
 
 
+void show_file_error( const char * const filename, const char * const msg,
+                      const int errcode )
+  {
+  if( verbosity >= 0 )
+    std::fprintf( stderr, "%s: %s: %s%s%s\n", program_name, filename, msg,
+                  ( errcode > 0 ) ? ": " : "",
+                  ( errcode > 0 ) ? std::strerror( errcode ) : "" );
+  }
+
+
 void internal_error( const char * const msg )
   {
   if( verbosity >= 0 )
@@ -189,21 +206,13 @@ int empty_domain()
 
 int not_readable( const char * const mapname )
   {
-  char buf[80];
-  snprintf( buf, sizeof buf,
-            "Mapfile '%s' does not exist or is not readable.", mapname );
-  show_error( buf );
+  show_file_error( mapname, "Mapfile does not exist or is not readable." );
   return 1;
   }
 
 
 int not_writable( const char * const mapname )
-  {
-  char buf[80];
-  snprintf( buf, sizeof buf, "Mapfile '%s' is not writable.", mapname );
-  show_error( buf );
-  return 1;
-  }
+  { show_file_error( mapname, "Mapfile is not writable." ); return 1; }
 
 
 long initial_time()
@@ -272,11 +281,47 @@ const char * format_num( long long num, long long limit,
   }
 
 
-// Shows the fraction "num/den" as a percentage with "prec" decimals.
-// If 'prec' is negative, only the decimals needed are shown.
-//
+// separate large numbers >= 100_000 in groups of 3 digits using '_'
+const char * format_num3( long long num )
+  {
+  const char * const si_prefix = "kMGTPEZY";
+  const char * const binary_prefix = "KMGTPEZY";
+  enum { buffers = 8, bufsize = 4 * sizeof (long long) };
+  static char buffer[buffers][bufsize];	// circle of static buffers for printf
+  static int current = 0;
+
+  char * const buf = buffer[current++]; current %= buffers;
+  char * p = buf + bufsize - 1;		// fill the buffer backwards
+  *p = 0;	// terminator
+  const bool negative = num < 0;
+  if( negative ) num = -num;
+  char prefix = 0;			// try binary first, then si
+  for( int i = 0; i < 8 && num >= 1024 && num % 1024 == 0; ++i )
+    { num /= 1024; prefix = binary_prefix[i]; }
+  if( prefix ) *(--p) = 'i';
+  else
+    for( int i = 0; i < 8 && num >= 1000 && num % 1000 == 0; ++i )
+      { num /= 1000; prefix = si_prefix[i]; }
+  if( prefix ) *(--p) = prefix;
+  const bool split = num >= 100000;
+
+  for( int i = 0; ; )
+    {
+    *(--p) = num % 10 + '0'; num /= 10; if( num == 0 ) break;
+    if( split && ++i >= 3 ) { i = 0; *(--p) = '_'; }
+    }
+  if( negative ) *(--p) = '-';
+  return p;
+  }
+
+
+/* Show the fraction "num/den" as a percentage with "prec" decimals.
+   If 'prec' is negative, show only the decimals needed.
+   If 'rounding', the last digit is rounded up if the next would be >= 5.
+*/
 const char * format_percentage( long long num, long long den,
-                                const int iwidth, int prec )
+                                const int iwidth, int prec,
+                                const bool rounding )
   {
   static char buf[80];
 
@@ -294,7 +339,7 @@ const char * format_percentage( long long num, long long den,
   if( prec < 0 ) prec = -prec;
 
   unsigned i;
-  if( num < 0 && num / den == 0 )
+  if( num < 0 && num / den == 0 )		// negative but > -1.0
     i = snprintf( buf, sizeof( buf ), "%*s", iwidth, "-0" );
   else i = snprintf( buf, sizeof( buf ), "%*lld", iwidth, num / den );
   if( i < sizeof( buf ) - 2 )
@@ -307,6 +352,22 @@ const char * format_percentage( long long num, long long den,
         { rest *= 10; buf[i++] = ( rest / den ) + '0';
           rest %= den; --prec; }
       }
+    if( rounding && rest * 2 >= den )		// round last decimal up
+      for( int j = i - 1; j >= 0; --j )
+        {
+        if( buf[j] == '.' ) continue;
+        if( buf[j] >= '0' && buf[j] < '9' ) { ++buf[j]; break; }
+        if( buf[j] == '9' ) buf[j] ='0';
+        if( j > 0 && buf[j-1] == '.' ) continue;
+        if( j > 0 && buf[j-1] == ' ' ) { buf[j-1] ='1'; break; }
+        if( j > 1 && buf[j-2] == ' ' && buf[j-1] == '-' )
+          { buf[j-2] ='-'; buf[j-1] ='1'; break; }
+        if( j == 0 || buf[j-1] < '0' || buf[j-1] > '9' )	// no prev digit
+          {
+          for( int k = i - 1; k > j; --k ) buf[k] = buf[k-1];
+          buf[j] ='1'; break;		// prepend a '1' to the first digit
+          }
+        }
     }
   else i = sizeof( buf ) - 2;
   buf[i++] = '%';

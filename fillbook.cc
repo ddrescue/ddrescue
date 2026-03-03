@@ -1,18 +1,18 @@
-/*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2020 Antonio Diaz Diaz.
+/* GNU ddrescue - Data recovery tool
+   Copyright (C) 2004-2022 Antonio Diaz Diaz.
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 2 of the License, or
-    (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 2 of the License, or
+   (at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #define _FILE_OFFSET_BITS 64
@@ -53,7 +53,7 @@ int Fillbook::fill_block( const Sblock & sb )
   if( writeblockp( odes_, iobuf(), size, sb.pos() + offset() ) != size ||
       ( synchronous_ && fsync( odes_ ) != 0 && errno != EINVAL ) )
     {
-    if( !ignore_write_errors ) final_msg( "Write error", errno );
+    if( !ignore_write_errors ) final_msg( oname_, "Write error", errno );
     return 1;
     }
   filled_size += size; remaining_size -= size;
@@ -206,7 +206,7 @@ int Fillbook::do_fill( const int odes )
     }
   if( final_msg().size() ) show_error( final_msg().c_str(), final_errno() );
   if( close( odes_ ) != 0 )
-    { show_error( "Error closing outfile", errno );
+    { show_file_error( oname_, "Error closing outfile", errno );
       if( retval == 0 ) retval = 1; }
   if( retval ) return retval;		// errors have priority over signals
   if( signaled ) return signaled_exit();

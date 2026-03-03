@@ -1,20 +1,20 @@
-/*  Rational - Rational number class with overflow detection
-    Copyright (C) 2005-2020 Antonio Diaz Diaz.
+/* Rational - Rational number class with overflow detection
+   Copyright (C) 2005-2022 Antonio Diaz Diaz.
 
-    This library is free software. Redistribution and use in source and
-    binary forms, with or without modification, are permitted provided
-    that the following conditions are met:
+   This library is free software. Redistribution and use in source and
+   binary forms, with or without modification, are permitted provided
+   that the following conditions are met:
 
-    1. Redistributions of source code must retain the above copyright
-    notice, this list of conditions, and the following disclaimer.
+   1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions, and the following disclaimer.
 
-    2. Redistributions in binary form must reproduce the above copyright
-    notice, this list of conditions, and the following disclaimer in the
-    documentation and/or other materials provided with the distribution.
+   2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions, and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
 
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+   This library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 */
 
 #include <algorithm>
@@ -149,11 +149,11 @@ int Rational::round() const
   }
 
 
-// Recognized formats: 123 123/456 123.456 .123 12% 12/3% 12.3% .12%
-// Values may be preceded by an optional '+' or '-' sign.
-// Returns the number of chars read from 's', or 0 if input is invalid.
-// In case of invalid input, the Rational is not changed.
-//
+/* Recognized formats: 123 123/456 123.456 .123 12% 12/3% 12.3% .12%
+   Values may be preceded by an optional '+' or '-' sign.
+   Return the number of chars read from 's', or 0 if input is invalid.
+   In case of invalid input, the Rational is not changed.
+*/
 int Rational::parse( const char * const s )
   {
   if( !s || !s[0] ) return 0;
@@ -209,12 +209,12 @@ int Rational::parse( const char * const s )
   }
 
 
-// Returns a string representing the value 'num/den' in decimal point
-// format with 'prec' decimals.
-// 'iwidth' is the minimum width of the integer part, prefixed with
-// spaces if needed.
-// If 'prec' is negative, only the decimals needed are produced.
-//
+/* Return a string representing the value 'num/den' in decimal point format
+   with 'prec' decimals.
+   'iwidth' is the minimum width of the integer part, prefixed with spaces
+   if needed.
+   If 'prec' is negative, produce only the decimals needed.
+*/
 std::string Rational::to_decimal( const unsigned iwidth, int prec ) const
   {
   if( den <= 0 ) return overflow_string( num );
@@ -239,10 +239,10 @@ std::string Rational::to_decimal( const unsigned iwidth, int prec ) const
   }
 
 
-// Returns a string representing the value 'num/den' in fractional form.
-// 'width' is the minimum width to be produced, prefixed with spaces if
-// needed.
-//
+/* Return a string representing the value 'num/den' in fractional form.
+   'width' is the minimum width to be produced, prefixed with spaces if
+   needed.
+*/
 std::string Rational::to_fraction( const unsigned width ) const
   {
   if( den <= 0 ) return overflow_string( num );

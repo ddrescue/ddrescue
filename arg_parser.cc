@@ -1,20 +1,20 @@
-/*  Arg_parser - POSIX/GNU command line argument parser. (C++ version)
-    Copyright (C) 2006-2020 Antonio Diaz Diaz.
+/* Arg_parser - POSIX/GNU command line argument parser. (C++ version)
+   Copyright (C) 2006-2022 Antonio Diaz Diaz.
 
-    This library is free software. Redistribution and use in source and
-    binary forms, with or without modification, are permitted provided
-    that the following conditions are met:
+   This library is free software. Redistribution and use in source and
+   binary forms, with or without modification, are permitted provided
+   that the following conditions are met:
 
-    1. Redistributions of source code must retain the above copyright
-    notice, this list of conditions, and the following disclaimer.
+   1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions, and the following disclaimer.
 
-    2. Redistributions in binary form must reproduce the above copyright
-    notice, this list of conditions, and the following disclaimer in the
-    documentation and/or other materials provided with the distribution.
+   2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions, and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
 
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+   This library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 */
 
 #include <cstring>
@@ -35,9 +35,10 @@ bool Arg_parser::parse_long_option( const char * const opt, const char * const a
 
   // Test all long options for either exact match or abbreviated matches.
   for( int i = 0; options[i].code != 0; ++i )
-    if( options[i].name && std::strncmp( options[i].name, &opt[2], len ) == 0 )
+    if( options[i].long_name &&
+        std::strncmp( options[i].long_name, &opt[2], len ) == 0 )
       {
-      if( std::strlen( options[i].name ) == len )	// Exact match found
+      if( std::strlen( options[i].long_name ) == len )	// Exact match found
         { index = i; exact = true; break; }
       else if( index < 0 ) index = i;		// First nonexact match found
       else if( options[index].code != options[i].code ||
@@ -58,19 +59,19 @@ bool Arg_parser::parse_long_option( const char * const opt, const char * const a
     }
 
   ++argind;
-  data.push_back( Record( options[index].code ) );
+  data.push_back( Record( options[index].code, options[index].long_name ) );
 
   if( opt[len+2] )		// '--<long_option>=<argument>' syntax
     {
     if( options[index].has_arg == no )
       {
-      error_ = "option '--"; error_ += options[index].name;
+      error_ = "option '--"; error_ += options[index].long_name;
       error_ += "' doesn't allow an argument";
       return false;
       }
     if( options[index].has_arg == yes && !opt[len+3] )
       {
-      error_ = "option '--"; error_ += options[index].name;
+      error_ = "option '--"; error_ += options[index].long_name;
       error_ += "' requires an argument";
       return false;
       }
@@ -82,7 +83,7 @@ bool Arg_parser::parse_long_option( const char * const opt, const char * const a
     {
     if( !arg || !arg[0] )
       {
-      error_ = "option '--"; error_ += options[index].name;
+      error_ = "option '--"; error_ += options[index].long_name;
       error_ += "' requires an argument";
       return false;
       }

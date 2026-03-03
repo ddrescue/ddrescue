@@ -1,18 +1,18 @@
-/*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2020 Antonio Diaz Diaz.
+/* GNU ddrescue - Data recovery tool
+   Copyright (C) 2004-2022 Antonio Diaz Diaz.
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 2 of the License, or
-    (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 2 of the License, or
+   (at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 class Sliding_average		// Calculates the average of the last N terms
@@ -133,7 +133,7 @@ class Rescuebook : public Mapbook, public Rb_options
   long long non_tried_size, non_trimmed_size, non_scraped_size;
   long long bad_size, finished_size;
   const Domain * const test_domain;	// good/bad map for test mode
-  const char * const iname_;
+  const char * const iname_, * const oname_;
   unsigned long bad_areas;		// bad areas found so far
   unsigned long read_errors, slow_reads;
   int ides_, odes_;			// input and output file descriptors
@@ -164,7 +164,8 @@ class Rescuebook : public Mapbook, public Rb_options
   bool errors_or_timeout()
     { if( bad_areas > max_bad_areas ) e_code |= 2; return ( e_code != 0 ); }
   const char * percent_rescued() const
-    { return format_percentage( finished_size, domain().in_size(), 3, 2 ); }
+    { return format_percentage( finished_size, domain().in_size(), 3, 2, false ); }
+  bool rescue_finished() const { return finished_size >= domain().in_size(); }
   int copy_and_update( const Block & b, int & copied_size,
                        int & error_size, const char * const msg,
                        const Status curr_st, const int curr_pass,
@@ -191,8 +192,9 @@ public:
   Rescuebook( const long long offset, const long long insize,
               Domain & dom, const Domain * const test_dom,
               const Mb_options & mb_opts, const Rb_options & rb_opts,
-              const char * const iname, const char * const mapname,
-              const int cluster, const int hardbs, const bool synchronous );
+              const char * const iname, const char * const oname,
+              const char * const mapname, const int cluster,
+              const int hardbs, const bool synchronous );
   ~Rescuebook() { delete[] voe_buf; }
 
   int do_commands( const int ides, const int odes );

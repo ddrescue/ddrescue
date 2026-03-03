@@ -1,18 +1,18 @@
-/*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2020 Antonio Diaz Diaz.
+/* GNU ddrescue - Data recovery tool
+   Copyright (C) 2004-2022 Antonio Diaz Diaz.
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 2 of the License, or
-    (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 2 of the License, or
+   (at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #define _FILE_OFFSET_BITS 64
@@ -56,7 +56,7 @@ bool Mapbook::save_mapfile( const char * const name )
   if( f && write_mapfile( f, true, true ) && std::fclose( f ) == 0 )
     {
     char buf[80];
-    snprintf( buf, sizeof buf, "Mapfile saved in '%s'\n", name );
+    snprintf( buf, sizeof buf, "Mapfile saved in '%s'", name );
     final_msg( buf );
     return true;
     }
@@ -81,7 +81,7 @@ bool Mapbook::emergency_save()
   if( home_name.size() &&
       filename() != home_name && save_mapfile( home_name.c_str() ) )
     return true;
-  show_error( "Emergency save failed." );
+  show_file_error( dead_name.c_str(), "Emergency save failed." );
   return false;
   }
 
@@ -129,9 +129,9 @@ Mapbook::Mapbook( const long long offset, const long long insize,
   }
 
 
-// Writes periodically the mapfile to disc.
-// Returns false only if update is attempted and fails.
-//
+/* Write periodically the mapfile to disc.
+   Return false only if update is attempted and fails.
+*/
 bool Mapbook::update_mapfile( const int odes, const bool force )
   {
   if( !filename() ) return true;
@@ -150,7 +150,7 @@ bool Mapbook::update_mapfile( const int odes, const bool force )
     }
   um_prev_mf_sync = mf_sync;
 
-  while( true )
+  for( bool first_post = true; ; first_post = false )
     {
     errno = 0;
     if( write_mapfile( 0, true, mf_sync ) )
@@ -158,10 +158,8 @@ bool Mapbook::update_mapfile( const int odes, const bool force )
       { um_t1 = std::time( 0 ); if( mf_sync ) um_t1s = um_t1; return true; }
     if( verbosity < 0 ) return false;
     const int saved_errno = errno;
-    std::fputc( '\n', stderr );
-    char buf[80];
-    snprintf( buf, sizeof buf, "Error writing mapfile '%s'", filename() );
-    show_error( buf, saved_errno );
+    if( first_post ) std::fputc( '\n', stderr );
+    show_file_error( filename(), "Error writing mapfile", saved_errno );
     std::fputs( "Fix the problem and press ENTER to retry,\n"
                 "                     or E+ENTER for an emergency save and exit,\n"
                 "                     or Q+ENTER to abort.\n", stderr );
@@ -175,7 +173,7 @@ bool Mapbook::update_mapfile( const int odes, const bool force )
       if( c == '\r' || c == '\n' || c == 'e' || c == 'q' )
         {
         if( c == 'q' || ( c == 'e' && emergency_save() ) )
-          { if( !force ) std::fputs( "\n\n\n\n", stdout ); return false; }
+          { if( !force ) std::fputs( "\n\n\n\n\n", stdout ); return false; }
         break;
         }
       }

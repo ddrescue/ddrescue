@@ -1,18 +1,18 @@
-/*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2020 Antonio Diaz Diaz.
+/* GNU ddrescue - Data recovery tool
+   Copyright (C) 2004-2022 Antonio Diaz Diaz.
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 2 of the License, or
-    (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 2 of the License, or
+   (at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 struct Mb_options
@@ -69,7 +69,11 @@ public:
   bool mapfile_exists() const { return mapfile_exists_; }
   long long mapfile_insize() const { return mapfile_insize_; }
 
-  void final_msg( const std::string & msg, const int e = 0 )
+  void final_msg( const char * const filename, const char * const msg,
+                  const int e = 0 )
+    { final_msg_ = filename; final_msg_ += ": "; final_msg_ += msg;
+      final_errno_ = e; }
+  void final_msg( const char * const msg, const int e = 0 )
     { final_msg_ = msg; final_errno_ = e; }
 
   void truncate_domain( const long long end )
@@ -98,6 +102,7 @@ class Fillbook : public Mapbook, public Fb_options
   {
   long long filled_size;		// size already filled
   long long remaining_size;		// size to be filled
+  const char * const oname_;
   unsigned long filled_areas;		// areas already filled
   unsigned long remaining_areas;	// areas to be filled
   int odes_;				// output file descriptor
@@ -115,11 +120,12 @@ class Fillbook : public Mapbook, public Fb_options
 
 public:
   Fillbook( const long long offset, Domain & dom, const Fb_options & fb_opts,
-            const Mb_options & mb_opts, const char * const mapname,
-            const int cluster, const int hardbs, const bool synchronous )
+            const Mb_options & mb_opts, const char * const oname,
+            const char * const mapname, const int cluster, const int hardbs,
+            const bool synchronous )
     : Mapbook( offset, 0, dom, mb_opts, mapname, cluster, hardbs, true, false ),
       Fb_options( fb_opts ),
-      synchronous_( synchronous ),
+      oname_( oname ), synchronous_( synchronous ),
       a_rate( 0 ), c_rate( 0 ), first_size( 0 ), last_size( 0 ),
       last_ipos( 0 ), t0( 0 ), t1( 0 ), oldlen( 0 )
       {}
@@ -132,6 +138,7 @@ public:
 class Genbook : public Mapbook
   {
   long long finished_size, gensize;	// total recovered and generated sizes
+  const char * const iname_;
   int odes_;				// output file descriptor
 					// variables for show_status
   long long a_rate, c_rate, first_size, last_size;
@@ -145,12 +152,12 @@ class Genbook : public Mapbook
                     bool force = false );
 public:
   Genbook( const long long offset, const long long insize,
-           Domain & dom, const Mb_options & mb_opts,
+           Domain & dom, const Mb_options & mb_opts, const char * const iname,
            const char * const mapname, const int cluster, const int hardbs )
     : Mapbook( offset, insize, dom, mb_opts, mapname, cluster, hardbs, false,
                false ),
-      a_rate( 0 ), c_rate( 0 ), first_size( 0 ), last_size( 0 ),
-      last_ipos( 0 ), t0( 0 ), t1( 0 ), oldlen( 0 )
+      iname_( iname ), a_rate( 0 ), c_rate( 0 ), first_size( 0 ),
+      last_size( 0 ), last_ipos( 0 ), t0( 0 ), t1( 0 ), oldlen( 0 )
       {}
 
   int do_generate( const int odes );
@@ -165,11 +172,9 @@ inline bool block_is_zero( const uint8_t * const buf, const int size )
 
 
 // Defined in genbook.cc
-//
 const char * format_time( const long t, const bool low_prec = false );
 
 // Defined in io.cc
-//
 int readblock( const int fd, uint8_t * const buf, const int size );
 int readblockp( const int fd, uint8_t * const buf, const int size,
                 const long long pos );

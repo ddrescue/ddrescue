@@ -1,18 +1,18 @@
-/*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2020 Antonio Diaz Diaz.
+/* GNU ddrescue - Data recovery tool
+   Copyright (C) 2004-2022 Antonio Diaz Diaz.
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 2 of the License, or
-    (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 2 of the License, or
+   (at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #define _FILE_OFFSET_BITS 64
@@ -27,7 +27,7 @@
 #include "block.h"
 
 
-// Align pos to next boundary if size is big enough
+// Align pos to next boundary if size is big enough.
 //
 void Block::align_pos( const int alignment )
   {
@@ -40,7 +40,7 @@ void Block::align_pos( const int alignment )
   }
 
 
-// Align end to previous boundary if size is big enough
+// Align end to previous boundary if size is big enough.
 //
 void Block::align_end( const int alignment )
   {
@@ -60,7 +60,7 @@ void Block::crop( const Block & b )
   }
 
 
-bool Block::join( const Block & b )
+bool Block::join( const Block & b )		// join contiguous blocks
   {
   if( this->follows( b ) ) pos_ = b.pos_;
   else if( !b.follows( *this ) ) return false;
@@ -101,13 +101,8 @@ Domain::Domain( const long long p, const long long s,
   if( !mapname || !mapname[0] ) { block_vector.push_back( b ); return; }
   Mapfile mapfile( mapname );
   if( !mapfile.read_mapfile( loose ? '?' : 0 ) )
-    {
-    char buf[80];
-    snprintf( buf, sizeof buf,
-              "Mapfile '%s' does not exist or is not readable.", mapname );
-    show_error( buf );
-    std::exit( 1 );
-    }
+    { show_file_error( mapname, "Mapfile does not exist or is not readable." );
+      std::exit( 1 ); }
   mapfile.compact_sblock_vector();
   for( long i = 0; i < mapfile.sblocks(); ++i )
     {

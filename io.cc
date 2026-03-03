@@ -1,22 +1,23 @@
-/*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2020 Antonio Diaz Diaz.
+/* GNU ddrescue - Data recovery tool
+   Copyright (C) 2004-2022 Antonio Diaz Diaz.
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 2 of the License, or
-    (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 2 of the License, or
+   (at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #define _FILE_OFFSET_BITS 64
 
+#include <algorithm>
 #include <cerrno>
 #include <climits>
 #include <csignal>
@@ -51,9 +52,9 @@ int set_signal( const int signum, void (*handler)( int ) )
 } // end namespace
 
 
-// Returns the number of bytes really read.
-// If (returned value < size) and (errno == 0), means EOF was reached.
-//
+/* Return the number of bytes really read.
+   If (value returned < size) and (errno == 0), means EOF was reached.
+*/
 int readblock( const int fd, uint8_t * const buf, const int size )
   {
   int sz = 0;
@@ -70,9 +71,9 @@ int readblock( const int fd, uint8_t * const buf, const int size )
   }
 
 
-// Returns the number of bytes really read.
-// If (returned value < size) and (errno == 0), means EOF was reached.
-//
+/* Return the number of bytes really read.
+   If (value returned < size) and (errno == 0), means EOF was reached.
+*/
 int readblockp( const int fd, uint8_t * const buf, const int size,
                 const long long pos )
   {
@@ -91,9 +92,9 @@ int readblockp( const int fd, uint8_t * const buf, const int size,
   }
 
 
-// Returns the number of bytes really written.
-// If (returned value < size), it is always an error.
-//
+/* Return the number of bytes really written.
+   If (value returned < size), it is always an error.
+*/
 int writeblockp( const int fd, const uint8_t * const buf, const int size,
                  const long long pos )
   {

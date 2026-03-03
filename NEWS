@@ -1,24 +1,44 @@
-Changes in version 1.25:
+Changes in version 1.26:
 
-Default constructors have been added to classes Block and Sblock.
-(Reported by Rosen Penev).
+While writing the mapfile, ddrescue now checks the return value of each call
+to 'fprintf' to catch any temporary failure of 'fprintf' not reported by the
+system when closing the file. (Hole in mapfile reported by Radomír Tomis).
 
-A failure in 'make check', happening when testing under a directory with
-spaces in the name, has been fixed. (Reported by David Morrison).
+Domain mapfiles may now contain unordered and overlapping blocks when
+'-L, --loose-domain' is specified as long as no block overlaps with other
+block of different status. (Suggested by Gábor Katona and Shaya Potter).
 
-In rescue mode, any non-finished subsector that is now found during the
-initial read of the mapfile will be joined to its corresponding sector (if
-it is also not finished), marking the whole sector with the less processed
-state, so as to make sure that sub-sector data will not be discarded from a
-successful read during the rescue. (A subsector is a block smaller than
-sector size). (Reported by David Burton).
+Ddrescue now shows the file name in all the diagnostics with a file involved.
+(Reported by Radomír Tomis).
 
-The time needed to write the mapfile is now excluded from the mapfile save
-and sync intervals. (It seems that some mapfiles take 7 seconds to write).
-(Reported by David Burton).
+Ddrescue now exits with status 1 on fatal read errors.
+(Suggested by Marco Marques).
 
-Ddrescue now extends the output file using 'ftruncate' if it works, because
-it is slightly more efficient.
+Empty phases are now completely skipped.
 
-Large numbers in messages (like device sizes) are now printed in groups of 3
-digits separated by underscore '_' characters to make them more readable.
+Ddrescue now scrolls forward after each pass. This keeps on the screen the
+final status of the previous pass, making it easier to estimate the amount
+of work done by the current pass. (Based on a suggestion by David Morrison).
+
+In case of error in a numerical argument to a command line option, ddrescue
+now shows the name of the option and the range of valid values.
+
+The option synonyms '--*-logfile' and '--pause' have been removed and are no
+longer recognized.
+
+Ddrescuelog now can convert between mapfiles and bitmaps of blocks (big and
+little endian). The new option '-F, --format' has been added to ddrescuelog.
+It selects the input format for '--create-mapfile', or the output format for
+'--list-blocks'. (Bitmap format proposed by Florian Sedivy).
+
+Option '-d, --delete-if-done' of ddrescuelog no longer returns an error if
+the mapfile is read from standard input. Instead it behaves like
+'-D, --done-status' because there is nothing to delete.
+
+'ddrescuelog --show-status' now rounds percentages up to get the sum closer
+to 100%.
+
+Three missing '#include <algorithm>' have been added.
+(Reported by Richard Burkert).
+
+The description of the algorithm in the manual has been improved.

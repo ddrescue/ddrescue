@@ -1,28 +1,22 @@
-/*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2020 Antonio Diaz Diaz.
+/* GNU ddrescue - Data recovery tool
+   Copyright (C) 2004-2022 Antonio Diaz Diaz.
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 2 of the License, or
-    (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 2 of the License, or
+   (at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #ifndef LLONG_MAX
 #define LLONG_MAX  0x7FFFFFFFFFFFFFFFLL
-#endif
-#ifndef LLONG_MIN
-#define LLONG_MIN  (-LLONG_MAX - 1LL)
-#endif
-#ifndef ULLONG_MAX
-#define ULLONG_MAX 0xFFFFFFFFFFFFFFFFULL
 #endif
 
 // requires '#include <cstdio>' for 'FILE *'
@@ -43,6 +37,7 @@ public:
   long long pos() const { return pos_; }
   long long size() const { return size_; }
   long long end() const { return pos_ + size_; }
+  bool full() const { return ( end() >= LLONG_MAX ); }
 
   void pos( const long long p )
     { pos_ = std::max( p, 0LL );
@@ -86,9 +81,11 @@ public:
     { return ( pos_ <= pos && end() > pos ); }
   bool strictly_includes( const long long pos ) const
     { return ( pos_ < pos && end() > pos ); }
+  bool overlaps( const Block & b ) const
+    { return ( pos_ < b.end() && b.pos_ < end() ); }
 
   void crop( const Block & b );
-  bool join( const Block & b );
+  bool join( const Block & b );			// join contiguous blocks
   void shift_boundary( Block & b, const long long pos );
   Block split( long long pos, const int hardbs = 1 );
   };
@@ -198,6 +195,19 @@ public:
     return false;
     }
 
+  bool overlaps( const Block & b ) const
+    {
+    unsigned long l = 0, r = block_vector.size();
+    while( l < r )
+      {
+      const long m = ( l + r ) / 2;
+      const Block & db = block_vector[m];
+      if( db.overlaps( b ) ) return true;
+      if( db < b ) l = m + 1; else if( b < db ) r = m; else break;
+      }
+    return false;
+    }
+
   void clear()
     {
     block_vector.clear(); block_vector.push_back( Block( 0, 0 ) );
@@ -226,7 +236,7 @@ private:
   bool read_only_;
   std::vector< Sblock > sblock_vector;	// note: blocks are consecutive
 
-  void insert_sblock( const long i, const Sblock & sb )
+  void insert_sblock( const long i, const Sblock & sb )	// insert before i
     { sblock_vector.insert( sblock_vector.begin() + i, sb ); }
 
 public:
@@ -237,7 +247,7 @@ public:
   void compact_sblock_vector();
   void join_subsectors( const int hardbs );
   void extend_sblock_vector( const long long insize );
-  void shift_blocks( const long long offset );
+  void shift_blocks( const long long offset, const Sblock::Status st );
   bool truncate_vector( const long long end, const bool force = false );
   void set_to_status( const Sblock::Status st )
     { sblock_vector.assign( 1, Sblock( 0, -1, st ) ); }
@@ -246,11 +256,12 @@ public:
                       const bool mf_sync = false,
                       const Domain * const annotate_domainp = 0 ) const;
 
-  bool blank() const;
+  bool blank() const;			// empty or all blocks non_tried
   long long current_pos() const { return current_pos_; }
   Status current_status() const { return current_status_; }
   int current_pass() const { return current_pass_; }
   const char * filename() const { return filename_; }
+  const char * pname( const bool in = true ) const;	// printable name
   bool read_only() const { return read_only_; }
 
   void current_pos( const long long pos ) { current_pos_ = pos; }
@@ -259,7 +270,7 @@ public:
       current_msg = ( st == finished ) ? "Finished" : msg; }
   void current_pass( const int pass ) { current_pass_ = pass; }
 
-  Block extent() const
+  Block extent() const			// pos of first block may be > 0
     { if( sblock_vector.empty() ) return Block( 0, 0 );
       return Block( sblock_vector.front().pos(),
                     sblock_vector.back().end() - sblock_vector.front().pos() ); }
@@ -299,8 +310,10 @@ public:
 
 // Defined in main_common.cc
 extern int verbosity;
-void show_error( const char * const msg,
-                 const int errcode = 0, const bool help = false );
+void show_error( const char * const msg, const int errcode = 0,
+                 const bool help = false );
+void show_file_error( const char * const filename, const char * const msg,
+                      const int errcode = 0 );
 void internal_error( const char * const msg );
 int empty_domain();
 int not_readable( const char * const mapname );
@@ -311,8 +324,7 @@ bool write_timestamp( FILE * const f );
 bool write_final_timestamp( FILE * const f );
 const char * format_num( long long num, long long limit = 999999,
                          const int set_prefix = 0 );
-const char * format_percentage( long long num, long long den,
-                                const int iwidth = 3, int prec = -2 );
-
-// defined in main.cc
 const char * format_num3( long long num );
+const char * format_percentage( long long num, long long den,
+                                const int iwidth = 3, int prec = -2,
+                                const bool rounding = true );

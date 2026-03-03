@@ -21,13 +21,13 @@ logobjs = arg_parser.o block.o mapfile.o ddrescuelog.o
 all : $(progname) ddrescuelog
 
 $(progname) : $(objs)
-	$(CXX) $(LDFLAGS) $(CXXFLAGS) -o $@ $(objs)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $(objs)
 
 ddrescuelog : $(logobjs)
-	$(CXX) $(LDFLAGS) $(CXXFLAGS) -o $@ $(logobjs)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $(logobjs)
 
 static_$(progname) : $(objs)
-	$(CXX) $(LDFLAGS) $(CXXFLAGS) -static -o $@ $(objs)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -static -o $@ $(objs)
 
 non_posix.o : non_posix.cc
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(use_non_posix) -c -o $@ $<
@@ -68,7 +68,7 @@ $(VPATH)/doc/$(progname).1 : $(progname)
 	help2man -n 'data recovery tool' -o $@ ./$(progname)
 
 $(VPATH)/doc/ddrescuelog.1 : ddrescuelog
-	help2man -n 'tool for ddrescue mapfiles' -o $@ --no-info ./ddrescuelog
+	help2man -n 'tool for ddrescue mapfiles' -o $@ --info-page=$(pkgname) ./ddrescuelog
 
 Makefile : $(VPATH)/configure $(VPATH)/Makefile.in
 	./config.status
@@ -94,7 +94,7 @@ install-info :
 	-rm -f "$(DESTDIR)$(infodir)/$(pkgname).info"*
 	$(INSTALL_DATA) $(VPATH)/doc/$(pkgname).info "$(DESTDIR)$(infodir)/$(pkgname).info"
 	-if $(CAN_RUN_INSTALLINFO) ; then \
-		install-info --info-dir="$(DESTDIR)$(infodir)" "$(DESTDIR)$(infodir)/$(pkgname).info" ; \
+	  install-info --info-dir="$(DESTDIR)$(infodir)" "$(DESTDIR)$(infodir)/$(pkgname).info" ; \
 	fi
 
 install-info-compress : install-info
@@ -119,7 +119,7 @@ uninstall-bin :
 
 uninstall-info :
 	-if $(CAN_RUN_INSTALLINFO) ; then \
-		install-info --info-dir="$(DESTDIR)$(infodir)" --remove "$(DESTDIR)$(infodir)/$(pkgname).info" ; \
+	  install-info --info-dir="$(DESTDIR)$(infodir)" --remove "$(DESTDIR)$(infodir)/$(pkgname).info" ; \
 	fi
 	-rm -f "$(DESTDIR)$(infodir)/$(pkgname).info"*
 

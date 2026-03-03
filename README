@@ -35,15 +35,15 @@ Ddrescue recommends lzip for compression of backups because the lzip format
 is designed for long-term archiving and provides data recovery capabilities
 which nicely complement those of ddrescue. (Ddrescue fills unreadable
 sectors with data from other copies, while lziprecover corrects corrupt
-sectors with data from other copies). If the cause of file corruption is
-damaged media, the combination ddrescue + lziprecover is the best option for
-recovering data from multiple damaged copies.
+sectors with data from other copies). If the cause of file corruption is a
+damaged medium, the combination ddrescue + lziprecover is the best option
+for recovering data from multiple damaged copies.
 
 Recordable CD and DVD media keep their data only for a finite time
 (typically for some years). After that time, data loss develops slowly with
-read errors growing from the outer media region towards the inside. It is a
-good idea to make two (or more) copies of every important CD-ROM/DVD you
-burn so that you can later recover them with ddrescue.
+read errors growing from the outer region towards the inside. It is a good
+idea to make two (or more) copies of every important CD-ROM/DVD you burn so
+that you can later recover them with ddrescue.
 
 The mapfile is periodically saved to disc, as well as when ddrescue finishes
 or is interrupted. A backup copy of the mapfile with the extension ".bak" is
@@ -70,12 +70,12 @@ Ddrescue also features a 'fill mode' able to selectively overwrite parts of
 the output file, which has a number of interesting uses like wiping data,
 marking bad areas, or even, in some cases, "repair" damaged sectors.
 
-One of the great strengths of ddrescue is that it is interface-agnostic, and
-so can be used for any kind of device supported by your kernel (ATA, SATA,
+One of the strengths of ddrescue is that it is interface-agnostic, and so
+can be used for any kind of device supported by your kernel (ATA, SATA,
 SCSI, old MFM drives, floppy discs, or even flash media cards like SD).
 
 
-Copyright (C) 2004-2020 Antonio Diaz Diaz.
+Copyright (C) 2004-2022 Antonio Diaz Diaz.
 
 This file is free documentation: you have unlimited permission to copy,
 distribute, and modify it.

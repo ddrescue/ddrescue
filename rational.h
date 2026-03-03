@@ -1,33 +1,33 @@
-/*  Rational - Rational number class with overflow detection
-    Copyright (C) 2005-2020 Antonio Diaz Diaz.
+/* Rational - Rational number class with overflow detection
+   Copyright (C) 2005-2022 Antonio Diaz Diaz.
 
-    This library is free software. Redistribution and use in source and
-    binary forms, with or without modification, are permitted provided
-    that the following conditions are met:
+   This library is free software. Redistribution and use in source and
+   binary forms, with or without modification, are permitted provided
+   that the following conditions are met:
 
-    1. Redistributions of source code must retain the above copyright
-    notice, this list of conditions, and the following disclaimer.
+   1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions, and the following disclaimer.
 
-    2. Redistributions in binary form must reproduce the above copyright
-    notice, this list of conditions, and the following disclaimer in the
-    documentation and/or other materials provided with the distribution.
+   2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions, and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
 
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+   This library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 */
 
-// Rationals are kept normalized at all times.
-// Invariant = ( gcd( num, den ) == 1 && den > 0 ).
-// Range extends from INT_MAX to -INT_MAX.
-// Maximum resolution is 1 / INT_MAX.
-// In case of domain error or overflow, den is set to 0 and num is set
-// to >0, <0, or 0, meaning +INF, -INF, and NAN respectively. This error
-// condition can be tested with the function 'error', and can only be
-// cleared assigning a new value to the Rational.
-// While in error state, arithmetic operators become no ops and
-// relational operators return false, except !=, which returns true.
-//
+/* Rationals are kept normalized at all times.
+   Invariant = ( gcd( num, den ) == 1 && den > 0 ).
+   Range extends from INT_MAX to -INT_MAX.
+   Maximum resolution is 1 / INT_MAX.
+   In case of domain error or overflow, den is set to 0 and num is set
+   to >0, <0, or 0, meaning +INF, -INF, and NAN respectively. This error
+   condition can be tested with the function 'error', and can only be
+   cleared assigning a new value to the Rational.
+   While in error state, arithmetic operators become no ops and
+   relational operators return false, except !=, which returns true.
+*/
 class Rational
   {
   int num, den;

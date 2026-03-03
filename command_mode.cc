@@ -1,22 +1,23 @@
-/*  GNU ddrescue - Data recovery tool
-    Copyright (C) 2004-2020 Antonio Diaz Diaz.
+/* GNU ddrescue - Data recovery tool
+   Copyright (C) 2004-2022 Antonio Diaz Diaz.
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 2 of the License, or
-    (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 2 of the License, or
+   (at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #define _FILE_OFFSET_BITS 64
 
+#include <algorithm>
 #include <cctype>
 #include <cerrno>
 #include <climits>
@@ -54,7 +55,7 @@ int Rescuebook::copy_command( const char * const command )
       {
       if( complete_only ) truncate_domain( b.pos() + copied_size + error_size );
       else if( !truncate_vector( b.pos() + copied_size + error_size ) )
-        { final_msg( "EOF found below the size calculated from mapfile" );
+        { final_msg( iname_, "EOF found below the size calculated from mapfile." );
           retval = 1; }
       }
     if( copied_size > 0 )
@@ -65,7 +66,7 @@ int Rescuebook::copy_command( const char * const command )
                            Sblock::bad_sector );
       struct stat istat;
       if( stat( iname_, &istat ) != 0 )
-        { final_msg( "Input file disappeared", errno ); retval = 1; }
+        { final_msg( iname_, "Input file disappeared", errno ); retval = 1; }
       }
     if( retval ) return retval;
     }
@@ -143,7 +144,7 @@ int Rescuebook::do_commands( const int ides, const int odes )
     if( tmp ) { if( tmp > 0 ) retval = 1; if( tmp != 1 ) break; }
     }
   if( close( odes_ ) != 0 )
-    { show_error( "Error closing outfile", errno );
+    { show_file_error( oname_, "Error closing outfile", errno );
       if( retval == 0 ) retval = 1; }
   return retval;
   }
