@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2022 Antonio Diaz Diaz.
+   Copyright (C) 2004-2023 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -130,7 +130,7 @@ int Rescuebook::do_commands( const int ides, const int odes )
     else if( command.size() > 1 && command[0] == 's' )
       tmp = status_command( command.c_str() + 1 );
     else { std::printf( "error: unknown command '%s'\n", command.c_str() );
-           retval = 1; continue; }
+           retval = 1; if( safe_fflush( stdout ) ) continue; else tmp = 2; }
     if( tmp <= 0 ) std::fputs( "done\n", stdout );
     else
       {
@@ -141,6 +141,7 @@ int Rescuebook::do_commands( const int ides, const int odes )
          final_msg( "" ); }
       else std::fputs( "error\n", stdout );
       }
+    if( !safe_fflush( stdout ) ) tmp = 2;
     if( tmp ) { if( tmp > 0 ) retval = 1; if( tmp != 1 ) break; }
     }
   if( close( odes_ ) != 0 )

@@ -1,5 +1,5 @@
 /* GNU ddrescuelog - Tool for ddrescue mapfiles
-   Copyright (C) 2011-2022 Antonio Diaz Diaz.
+   Copyright (C) 2011-2023 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -16,9 +16,9 @@
 */
 /*
    Exit status: 0 for a normal exit, 1 for environmental problems
-   (file not found, invalid flags, I/O errors, etc), 2 to indicate a
-   corrupt or invalid input file, 3 for an internal consistency error
-   (e.g., bug) which caused ddrescuelog to panic.
+   (file not found, invalid command line options, I/O errors, etc), 2 to
+   indicate a corrupt or invalid input file, 3 for an internal consistency
+   error (e.g., bug) which caused ddrescuelog to panic.
 */
 
 #include <algorithm>
@@ -56,7 +56,7 @@ void show_help( const int hardbs )
                "rescue status, and can delete a mapfile if the rescue is done. Ddrescuelog\n"
                "operations can be restricted to one or several parts of the mapfile if the\n"
                "domain setting options are used.\n"
-               "\nUse '-' as mapfile to read the mapfile from standard input\n"
+               "\nUse a hyphen '-' as mapfile to read the mapfile from standard input\n"
                "(also in the options taking a mapfile argument) or to write the mapfile\n"
                "created by '--create-mapfile' to standard output.\n"
                "\nNOTE: In versions of ddrescue prior to 1.20 the mapfile was called\n"
@@ -93,15 +93,20 @@ void show_help( const int hardbs )
                "      --shift                     shift all block positions by (opos - ipos)\n"
                "\nNumbers may be in decimal, hexadecimal, or octal, and may be followed by a\n"
                "multiplier: s = sectors, k = 1000, Ki = 1024, M = 10^6, Mi = 2^20, etc...\n"
-               "\nExit status: 0 for a normal exit, 1 for environmental problems (file\n"
-               "not found, invalid flags, I/O errors, etc), 2 to indicate a corrupt or\n"
-               "invalid input file, 3 for an internal consistency error (e.g., bug) which\n"
-               "caused ddrescuelog to panic.\n"
+               "\nExit status: 0 for a normal exit, 1 for environmental problems\n"
+               "(file not found, invalid command line options, I/O errors, etc), 2 to\n"
+               "indicate a corrupt or invalid input file, 3 for an internal consistency\n"
+               "error (e.g., bug) which caused ddrescuelog to panic.\n"
                "\nReport bugs to bug-ddrescue@gnu.org\n"
                "Ddrescue home page: http://www.gnu.org/software/ddrescue/ddrescue.html\n"
                "General help using GNU software: http://www.gnu.org/gethelp\n" );
   }
 
+} // end namespace
+
+#include "main_common.cc"
+
+namespace {
 
 void parse_format( const std::string & sarg, const char * const option_name,
                    Format & format )
@@ -110,12 +115,8 @@ void parse_format( const std::string & sarg, const char * const option_name,
   else if( sarg == "bitmap-be" ) format = f_bitmap_be;
   else if( sarg == "bitmap" || sarg == "bitmap-le" ) format = f_bitmap_le;
   else
-    {
-    if( verbosity >= 0 )
-      std::fprintf( stderr, "%s: Invalid argument in option '%s'.\n",
-                    program_name, option_name );
-    std::exit( 1 );
-    }
+    { show_option_error( sarg.c_str(), "Invalid format name in", option_name );
+      std::exit( 1 ); }
   }
 
 
@@ -132,20 +133,17 @@ void parse_types( const std::string & sarg, const char * const option_name,
     const char ch = sarg[i];
     if( ch == ',' )
       {
-      if( comma_found ) { error = true; break; }
-      else { comma_found = true; p = &types2; continue; }
+      if( !comma_found ) { comma_found = true; p = &types2; continue; }
+      show_option_error( sarg.c_str(), "Too many commas in argument of",
+                         option_name ); std::exit( 1 );
       }
     if( !Sblock::isstatus( ch ) ) { error = true; break; }
     *p += ch;
     }
   if( types1.empty() || types2.empty() ) error = true;
   if( error )
-    {
-    if( verbosity >= 0 )
-      std::fprintf( stderr, "%s: Invalid type in argument of option '%s'.\n",
-                    program_name, option_name );
-    std::exit( 1 );
-    }
+    { show_option_error( sarg.c_str(), inval_t_msg, option_name );
+      std::exit( 1 ); }
   if( types1.size() > types2.size() )
     types2.append( types1.size() - types2.size(), types2[types2.size()-1] );
   }
@@ -157,12 +155,8 @@ void parse_2types( const std::string & sarg, const char * const option_name,
   if( sarg.empty() ) return;
   if( sarg.size() != 2 || sarg[0] == sarg[1] ||
       !Sblock::isstatus( sarg[0] ) || !Sblock::isstatus( sarg[1] ) )
-    {
-    if( verbosity >= 0 )
-      std::fprintf( stderr, "%s: Invalid type in argument of option '%s'.\n",
-                    program_name, option_name );
-    std::exit( 1 );
-    }
+    { show_option_error( sarg.c_str(), inval_t_msg, option_name );
+      std::exit( 1 ); }
   type1 = Sblock::Status( sarg[0] );
   type2 = Sblock::Status( sarg[1] );
   }
@@ -173,12 +167,8 @@ void parse_type( const std::string & sarg, const char * const option_name,
   {
   if( sarg.empty() ) return;
   if( sarg.size() != 1 || !Sblock::isstatus( sarg[0] ) )
-    {
-    if( verbosity >= 0 )
-      std::fprintf( stderr, "%s: Invalid type in argument of option '%s'.\n",
-                    program_name, option_name );
-    std::exit( 1 );
-    }
+    { show_option_error( sarg.c_str(), inval_t_msg, option_name );
+      std::exit( 1 ); }
   complete_type = Sblock::Status( sarg[0] );
   }
 
@@ -731,9 +721,6 @@ int do_show_status( Domain & domain, const char * const mapname,
 } // end namespace
 
 
-#include "main_common.cc"
-
-
 int main( const int argc, const char * const argv[] )
   {
   long long ipos = 0;
@@ -821,7 +808,7 @@ int main( const int argc, const char * const argv[] )
       case 'h': show_help( default_hardbs ); return 0;
       case 'i': ipos = getnum( arg, pn, hardbs, 0 ); break;
       case 'l': set_mode( program_mode, m_list ); types1 = sarg;
-                check_types( types1, pn ); break;
+                check_types( arg, types1, pn, false ); break;
       case 'L': loose = true; break;
       case 'm': set_name( &domain_mapfile_name, arg, pn ); break;
       case 'n': set_mode( program_mode, m_invert ); break;

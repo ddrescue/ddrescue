@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2022 Antonio Diaz Diaz.
+   Copyright (C) 2004-2023 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -114,7 +114,7 @@ void Fillbook::show_status( const long long ipos, const char * const msg,
     }
 
   if( ipos >= 0 ) last_ipos = ipos;
-  const long t2 = std::time( 0 );
+  const long long t2 = std::time( 0 );
   if( t2 < t1 )					// clock jumped back
     {
     t0 -= std::min( t0, t1 - t2 );
@@ -144,7 +144,7 @@ void Fillbook::show_status( const long long ipos, const char * const msg,
       for( int i = len; i < oldlen; ++i ) std::fputc( ' ', stdout );
       oldlen = len;
       }
-    std::fflush( stdout );
+    safe_fflush( stdout );
     }
   }
 
@@ -195,7 +195,7 @@ int Fillbook::do_fill( const int odes )
     if( retval == -2 ) std::fputs( "\nMapfile error", stdout );
     else if( signaled ) std::fputs( "\nInterrupted by user", stdout );
     std::fputc( '\n', stdout );
-    std::fflush( stdout );
+    safe_fflush( stdout );
     }
   if( retval == -2 ) retval = 1;		// mapfile error
   else

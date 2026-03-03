@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2022 Antonio Diaz Diaz.
+   Copyright (C) 2004-2023 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -47,6 +47,18 @@ void input_pos_error( const long long pos, const long long insize )
   }
 
 } // end namespace
+
+
+bool safe_fflush( FILE * const f )
+  {
+  while( true )
+    {
+    const int ret = std::fflush( f );
+    if( ret == 0 ) return true;
+    if( ret == EOF && errno == EINTR ) continue;
+    return false;
+    }
+  }
 
 
 bool Mapbook::save_mapfile( const char * const name )
@@ -101,7 +113,7 @@ Mapbook::Mapbook( const long long offset, const long long insize,
   long alignment = sysconf( _SC_PAGESIZE );
   if( alignment < hardbs_ || alignment % hardbs_ ) alignment = hardbs_;
   if( alignment < 2 ) alignment = 0;
-  iobuf_ = iobuf_base = new uint8_t[ alignment + iobuf_size_ + hardbs_ ];
+  iobuf_ = iobuf_base = new uint8_t[ alignment + ( 2 * iobuf_size_ ) ];
   if( alignment > 1 )		// align iobuf for direct disc access
     {
     const int disp =
@@ -137,7 +149,7 @@ bool Mapbook::update_mapfile( const int odes, const bool force )
   if( !filename() ) return true;
   const int interval = ( mapfile_save_interval >= 0 ) ? mapfile_save_interval :
     30 + std::min( 270L, sblocks() / 38 );	// auto, 30s to 5m
-  const long t2 = std::time( 0 );
+  const long long t2 = std::time( 0 );
   if( um_t1 == 0 || um_t1 > t2 ) um_t1 = um_t1s = t2;	// initialize
   if( !force && t2 - um_t1 < interval ) return true;
   const bool mf_sync = ( force || t2 - um_t1s >= mapfile_sync_interval );
@@ -163,7 +175,7 @@ bool Mapbook::update_mapfile( const int odes, const bool force )
     std::fputs( "Fix the problem and press ENTER to retry,\n"
                 "                     or E+ENTER for an emergency save and exit,\n"
                 "                     or Q+ENTER to abort.\n", stderr );
-    std::fflush( stderr );
+    safe_fflush( stderr );
     while( true )
       {
       tcflush( STDIN_FILENO, TCIFLUSH );

@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2022 Antonio Diaz Diaz.
+   Copyright (C) 2004-2023 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -15,6 +15,8 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// requires '#include <cstdio>' for 'FILE *'
+
 struct Mb_options
   {
   int mapfile_save_interval;			// default -1 = auto
@@ -29,13 +31,13 @@ class Mapbook : public Mapfile, public Mb_options
   const long long offset_;		// outfile offset (opos - ipos);
   long long mapfile_insize_;
   Domain & domain_;			// rescue domain
-  uint8_t *iobuf_base;			// alignment + iobuf + iobuf_aux
+  uint8_t *iobuf_base;			// alignment + iobuf + iobuf2
   uint8_t *iobuf_;			// buffer aligned to page and hardbs
   const int hardbs_, softbs_;
   const int iobuf_size_;
   std::string final_msg_;
   int final_errno_;
-  long um_t1, um_t1s;			// variables for update_mapfile
+  long long um_t1, um_t1s;		// variables for update_mapfile
   bool um_prev_mf_sync;
   bool mapfile_exists_;
 
@@ -57,9 +59,9 @@ public:
   bool update_mapfile( const int odes = -1, const bool force = false );
 
   const Domain & domain() const { return domain_; }
-  uint8_t * iobuf() const { return iobuf_; }
-  uint8_t * iobuf_aux() const	// hardbs-sized buffer for verify_on_error
-    { return iobuf_ + iobuf_size_; }
+  uint8_t * iobuf() const { return iobuf_; }		// main I/O buffer
+  // second buffer for compare_before_write and verify_on_error
+  uint8_t * iobuf2() const { return iobuf_ + iobuf_size_; }
   int iobuf_size() const { return iobuf_size_; }
   int hardbs() const { return hardbs_; }
   int softbs() const { return softbs_; }
@@ -110,7 +112,7 @@ class Fillbook : public Mapbook, public Fb_options
 					// variables for show_status
   long long a_rate, c_rate, first_size, last_size;
   long long last_ipos;
-  long t0, t1;				// start, current times
+  long long t0, t1;			// start, current times
   int oldlen;
 
   int fill_block( const Sblock & sb );
@@ -143,7 +145,7 @@ class Genbook : public Mapbook
 					// variables for show_status
   long long a_rate, c_rate, first_size, last_size;
   long long last_ipos;
-  long t0, t1;				// start, current times
+  long long t0, t1;			// start, current times
   int oldlen;
 
   void check_block( const Block & b, int & copied_size, int & error_size );
@@ -172,7 +174,7 @@ inline bool block_is_zero( const uint8_t * const buf, const int size )
 
 
 // Defined in genbook.cc
-const char * format_time( const long t, const bool low_prec = false );
+const char * format_time( const long long t, const bool low_prec = false );
 
 // Defined in io.cc
 int readblock( const int fd, uint8_t * const buf, const int size );
@@ -183,3 +185,6 @@ int writeblockp( const int fd, const uint8_t * const buf, const int size,
 bool interrupted();
 void set_signals();
 int signaled_exit();
+
+// Defined in mapbook.cc
+bool safe_fflush( FILE * const f );

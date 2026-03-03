@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2022 Antonio Diaz Diaz.
+   Copyright (C) 2004-2023 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -156,9 +156,13 @@ int Rescuebook::copy_block( const Block & b, int & copied_size, int & error_size
       const long long end = pos + copied_size;
       if( end > sparse_size ) sparse_size = end;
       }
-    else if( writeblockp( odes_, iobuf(), copied_size, pos ) != copied_size ||
-             ( synchronous_ && fsync( odes_ ) != 0 && errno != EINVAL ) )
-      { final_msg( oname_, "Write error", errno ); return 1; }
+    else
+      if( !compare_before_write ||
+          readblockp( odes_, iobuf2(), copied_size, pos ) != copied_size ||
+          std::memcmp( iobuf(), iobuf2(), copied_size ) != 0 )
+        if( writeblockp( odes_, iobuf(), copied_size, pos ) != copied_size ||
+              ( synchronous_ && fsync( odes_ ) != 0 && errno != EINVAL ) )
+          { final_msg( oname_, "Write error", errno ); return 1; }
     }
   else iobuf_ipos = -1;
 
@@ -172,11 +176,11 @@ int Rescuebook::copy_block( const Block & b, int & copied_size, int & error_size
       {
       if( voe_ipos >= 0 )
         {
-        const int size = readblockp( ides_, iobuf_aux(), hardbs(), voe_ipos );
+        const int size = readblockp( ides_, iobuf2(), hardbs(), voe_ipos );
         if( size != hardbs() )
           { final_msg( iname_, "Input file no longer returns data", errno );
             e_code |= 8; }
-        else if( std::memcmp( voe_buf, iobuf_aux(), hardbs() ) != 0 )
+        else if( std::memcmp( voe_buf, iobuf2(), hardbs() ) != 0 )
           { final_msg( iname_, "Input file returns inconsistent data." );
             e_code |= 8; }
         }
@@ -227,7 +231,7 @@ int Rescuebook::copy_and_update( const Block & b, int & copied_size,
       {
       show_status( -1, "Paused", true );
       sleep( pause_on_pass );
-      const long t2 = std::time( 0 );
+      const long long t2 = std::time( 0 );
       if( t1 < t2 ) t1 = t2;			// clock may have jumped back
       ts = std::min( ts + pause_on_pass, t2 );	// avoid spurious timeout
       }
@@ -681,12 +685,12 @@ bool Rescuebook::update_rates( const bool force )
       }
     }
 
-  long t2 = std::time( 0 );
+  long long t2 = std::time( 0 );
   if( max_read_rate > 0 && finished_size - last_size > max_read_rate && t2 == t1 )
     { sleep( 1 ); t2 = std::time( 0 ); }
   if( t2 < t1 )					// clock jumped back
     {
-    const long delta = std::min( t0 - 1, t1 - t2 );
+    const long long delta = std::min( t0 - 1, t1 - t2 );
     t0 -= delta;
     ts -= delta;
     t1 = t2;
@@ -697,7 +701,7 @@ bool Rescuebook::update_rates( const bool force )
     {
     if( tp > 0 )
       {
-      const long delta = std::min( t0 - 1, (long)tp.round() );
+      const long long delta = std::min( t0 - 1, (long long)tp.round() );
       t0 -= delta;
       t1 -= delta;
       ts -= delta;
@@ -804,7 +808,7 @@ void Rescuebook::show_status( const long long ipos, const char * const msg,
         for( int i = len; i < oldlen; ++i ) std::fputc( ' ', stdout );
         oldlen = len;
         }
-      std::fflush( stdout );
+      safe_fflush( stdout );
       }
     rate_logger.print_line( t1 - t0, last_ipos, a_rate, c_rate, bad_areas,
                             bad_size );
@@ -949,7 +953,7 @@ int Rescuebook::do_rescue( const int ides, const int odes )
       if( e_code & 32 ) event_logger.echo_msg( "Too many slow reads" );
       }
     if( verbosity >= 0 )
-      { std::fputc( '\n', stdout ); std::fflush( stdout ); }
+      { std::fputc( '\n', stdout ); safe_fflush( stdout ); }
     }
   if( retval == -2 ) retval = 1;		// mapfile error
   else

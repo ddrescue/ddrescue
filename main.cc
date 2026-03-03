@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2022 Antonio Diaz Diaz.
+   Copyright (C) 2004-2023 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -16,9 +16,9 @@
 */
 /*
    Exit status: 0 for a normal exit, 1 for environmental problems
-   (file not found, invalid flags, I/O errors, etc), 2 to indicate a
-   corrupt or invalid input file, 3 for an internal consistency error
-   (e.g., bug) which caused ddrescue to panic.
+   (file not found, invalid command line options, I/O errors, etc), 2 to
+   indicate a corrupt or invalid input file, 3 for an internal consistency
+   error (e.g., bug) which caused ddrescue to panic.
 */
 
 #define _FILE_OFFSET_BITS 64
@@ -127,6 +127,7 @@ void show_help( const int cluster, const int hardbs )
                "  -u, --unidirectional           run all passes in the same direction\n"
                "  -v, --verbose                  be verbose (a 2nd -v gives more)\n"
                "  -w, --ignore-write-errors      make fill mode ignore write errors\n"
+               "  -W, --compare-before-write     omit superfluous writes in rescue mode\n"
                "  -x, --extend-outfile=<bytes>   extend outfile size to be at least this long\n"
                "  -X, --max-read-errors=<n>      maximum number of read errors allowed\n"
                "  -y, --synchronous              use synchronous writes for output file\n"
@@ -147,15 +148,20 @@ void show_help( const int cluster, const int hardbs )
                "\nNumbers may be in decimal, hexadecimal, or octal, and may be followed by a\n"
                "multiplier: s = sectors, k = 1000, Ki = 1024, M = 10^6, Mi = 2^20, etc...\n"
                "Time intervals have the format 1[.5][smhd] or 1/2[smhd].\n"
-               "\nExit status: 0 for a normal exit, 1 for environmental problems (file\n"
-               "not found, invalid flags, I/O errors, etc), 2 to indicate a corrupt or\n"
-               "invalid input file, 3 for an internal consistency error (e.g., bug) which\n"
-               "caused ddrescue to panic.\n"
+               "\nExit status: 0 for a normal exit, 1 for environmental problems\n"
+               "(file not found, invalid command line options, I/O errors, etc), 2 to\n"
+               "indicate a corrupt or invalid input file, 3 for an internal consistency\n"
+               "error (e.g., bug) which caused ddrescue to panic.\n"
                "\nReport bugs to bug-ddrescue@gnu.org\n"
                "Ddrescue home page: http://www.gnu.org/software/ddrescue/ddrescue.html\n"
                "General help using GNU software: http://www.gnu.org/gethelp\n" );
   }
 
+} // end namespace
+
+#include "main_common.cc"
+
+namespace {
 
 /* Recognized formats: <rational_number>[unit]
    Where the optional "unit" is one of 's', 'm', 'h', or 'd'.
@@ -177,25 +183,18 @@ Rational parse_rational_time( const char * const arg,
       case 'm': r *= 60; break;
       case 's':
       case  0 : break;
-      case ',': if( comma ) break;
+      case ',': if( comma ) break;			// fall through
       default :
-        if( verbosity >= 0 )
-          std::fprintf( stderr, "%s: Bad unit in time interval argument of "
-                        "option '%s'.\n", program_name, option_name );
-        std::exit( 1 );
+        show_option_error( arg, "Bad unit in time interval argument of",
+                           option_name ); std::exit( 1 );
       }
     if( !comma && arg[c] != 0 && arg[c] != ',' && arg[c+1] == ',' )
-      {
-      if( verbosity >= 0 )
-        std::fprintf( stderr, "%s: Extra characters in argument of "
-                      "option '%s'.\n", program_name, option_name );
-      std::exit( 1 );
-      }
+      { show_option_error( arg, "Extra characters in argument of",
+                           option_name ); std::exit( 1 ); }
     if( !r.error() && r >= 0 && r.denominator() <= max_den ) return r;
     }
-  if( verbosity >= 0 )
-    std::fprintf( stderr, "%s: Bad value in time interval argument of "
-                  "option '%s'.\n", program_name, option_name );
+  show_option_error( arg, "Bad value in time interval argument of",
+                     option_name );
   std::exit( 1 );
   }
 
@@ -322,7 +321,7 @@ int do_fill( const long long offset, Domain & domain,
   if( close( ides ) != 0 )
     { show_file_error( iname, "Error closing infile", errno ); return 1; }
 
-  const int odes = open( oname, O_CREAT | O_WRONLY | o_direct_out | O_BINARY,
+  const int odes = open( oname, O_WRONLY | O_CREAT | o_direct_out | O_BINARY,
                          outmode );
   if( odes < 0 )
     { show_file_error( oname, "Can't open output file", errno ); return 1; }
@@ -447,8 +446,7 @@ bool user_agrees_ids( const Rescuebook & rescuebook, const char * const iname,
   {
   about_to_copy( rescuebook, iname, oname, insize, ides, true );
   std::fputs( "Proceed (y/N)? ", stdout );
-  std::fflush( stdout );
-  return ( std::tolower( std::fgetc( stdin ) ) == 'y' );
+  return safe_fflush( stdout ) && std::tolower( std::fgetc( stdin ) ) == 'y';
   }
 
 
@@ -523,8 +521,9 @@ int do_rescue( const long long offset, Domain & domain,
   if( ask && !user_agrees_ids( rescuebook, iname, oname, insize, ides ) )
     return 1;
 
-  const int odes = open( oname, O_CREAT | O_WRONLY | o_direct_out |
-                         o_trunc | O_BINARY, outmode );
+  const int odes =
+    open( oname, ( rescuebook.compare_before_write ? O_RDWR : O_WRONLY ) |
+                 O_CREAT | o_direct_out | o_trunc | O_BINARY, outmode );
   if( odes < 0 )
     { show_file_error( oname, "Can't open output file", errno ); return 1; }
   if( lseek( odes, 0, SEEK_SET ) )
@@ -627,17 +626,11 @@ int do_rescue( const long long offset, Domain & domain,
   return rescuebook.do_rescue( ides, odes );
   }
 
-} // end namespace
 
-
-#include "main_common.cc"
-
-
-namespace {
-
-void parse_cpass( const char * p, const char * const option_name,
+void parse_cpass( const char * const arg, const char * const option_name,
                   Rb_options & rb_opts )
   {
+  const char * p = arg;
   rb_opts.cpass_bitset = 0;
   if( *p == '0' ) { if( p[1] == 0 ) return; }
   else while( true )
@@ -656,9 +649,7 @@ void parse_cpass( const char * p, const char * const option_name,
     if( *p == 0 ) return;
     if( *p == ',' ) ++p; else break;
     }
-  if( verbosity >= 0 )
-    std::fprintf( stderr, "%s: Invalid pass or range of passes in option '%s'.\n",
-                  program_name, option_name );
+  show_option_error( arg, "Invalid pass or range of passes in", option_name );
   std::exit( 1 );
   }
 
@@ -677,19 +668,11 @@ void parse_mapfile_intervals( const char * const arg, const char * const pn,
   if( ptr2 )
     mb_opts.mapfile_sync_interval = parse_time_interval( ptr2 + 1, pn );
   if( mb_opts.mapfile_sync_interval < 5 )
-    {
-    if( verbosity >= 0 )
-      std::fprintf( stderr, "%s: Sync interval must be >= 5 seconds "
-                    "in option '%s'.\n", program_name, pn );
-    std::exit( 1 );
-    }
+    { show_option_error( arg, "Sync interval must be >= 5 seconds in", pn );
+      std::exit( 1 ); }
   if( mb_opts.mapfile_save_interval > mb_opts.mapfile_sync_interval )
-    {
-    if( verbosity >= 0 )
-      std::fprintf( stderr, "%s: Save interval must be <= sync interval "
-                    "in option '%s'.\n", program_name, pn );
-    std::exit( 1 );
-    }
+    { show_option_error( arg, "Save interval must be <= sync interval in", pn );
+      std::exit( 1 ); }
   }
 
 
@@ -716,34 +699,18 @@ void parse_skipbs( const char * const arg, const char * const pn,
     rb_opts.max_skipbs = getnum( tail + 1, pn, hardbs, Rb_options::min_skipbs,
                                  rb_opts.max_max_skipbs, &tail );
     if( tail[0] )
-      {
-      if( verbosity >= 0 )
-        std::fprintf( stderr, "%s: Extra characters in argument of "
-                      "option '%s'.\n", program_name, pn );
-      std::exit( 1 );
-      }
+      { show_option_error( arg, "Extra characters in argument of", pn );
+        std::exit( 1 ); }
     }
   else if( tail[0] )
-    {
-    if( verbosity >= 0 )
-      std::fprintf( stderr, "%s: Bad separator in argument of option '%s'.\n",
-                    program_name, pn );
-    std::exit( 1 );
-    }
+    { show_option_error( arg, "Bad separator in argument of", pn );
+      std::exit( 1 ); }
   if( rb_opts.skipbs > 0 && rb_opts.skipbs < Rb_options::min_skipbs )
-    {
-    if( verbosity >= 0 )
-      std::fprintf( stderr, "%s: Initial skip size must be 0 or >= 64KiB "
-                    "in option '%s'.\n", program_name, pn );
-    std::exit( 1 );
-    }
+    { show_option_error( arg, "Initial skip size must be 0 or >= 64KiB in", pn );
+      std::exit( 1 ); }
   if( rb_opts.skipbs > rb_opts.max_skipbs )
-    {
-    if( verbosity >= 0 )
-      std::fprintf( stderr, "%s: Initial skip size must be <= max skip size "
-                    "in option '%s'.\n", program_name, pn );
-    std::exit( 1 );
-    }
+    { show_option_error( arg, "Initial skip size must be <= max skip size in",
+                         pn ); std::exit( 1 ); }
   }
 
 
@@ -810,7 +777,6 @@ int main( const int argc, const char * const argv[] )
     { 'B', "binary-prefixes",      Arg_parser::no  },
     { 'c', "cluster-size",         Arg_parser::yes },
     { 'C', "complete-only",        Arg_parser::no  },
-    { 'd', "direct",               Arg_parser::no  },
     { 'd', "idirect",              Arg_parser::no  },
     { 'D', "odirect",              Arg_parser::no  },
     { 'e', "max-bad-areas",        Arg_parser::yes },
@@ -845,6 +811,7 @@ int main( const int argc, const char * const argv[] )
     { 'v', "verbose",              Arg_parser::no  },
     { 'V', "version",              Arg_parser::no  },
     { 'w', "ignore-write-errors",  Arg_parser::no  },
+    { 'W', "compare-before-write", Arg_parser::no  },
     { 'x', "extend-outfile",       Arg_parser::yes },
     { 'X', "max-read-errors",      Arg_parser::yes },
     { 'y', "synchronous",          Arg_parser::no  },
@@ -893,7 +860,7 @@ int main( const int argc, const char * const argv[] )
       case 'f': force = true; break;
       case 'F': set_mode( program_mode, m_fill ); fb_opts.filltypes = sarg;
                 fb_opts.write_location_data =
-                  check_types( fb_opts.filltypes, pn, true ); break;
+                  check_types( arg, fb_opts.filltypes, pn, true ); break;
       case 'G': set_mode( program_mode, m_generate ); break;
       case 'h': show_help( cluster_bytes / default_hardbs, default_hardbs );
                 return 0;
@@ -923,6 +890,7 @@ int main( const int argc, const char * const argv[] )
       case 'v': if( verbosity < 4 ) ++verbosity; break;
       case 'V': show_version(); return 0;
       case 'w': fb_opts.ignore_write_errors = true; break;
+      case 'W': rb_opts.compare_before_write = true; break;
       case 'x': rb_opts.min_outfile_size = getnum( arg, pn, hardbs, 1 ); break;
       case 'X': rb_opts.max_read_errors = getnum( arg, pn, 0, 0, LONG_MAX ); break;
       case 'y': synchronous = true; break;
@@ -978,7 +946,7 @@ int main( const int argc, const char * const argv[] )
         return 1; }
       if( rb_opts != Rb_options() || test_mode_mapfile_name ||
           verify_input_size || preallocate || o_trunc )
-        show_error( "warning: Options -aACdeEHIJKlMnOpPrRStTuxX are ignored in fill mode." );
+        show_error( "warning: Options -aACdeEHIJKlMnOpPrRStTuWxX are ignored in fill mode." );
       return do_fill( opos - ipos, domain, fb_opts, mb_opts, iname, oname,
                       mapname, cluster, hardbs, o_direct_out, synchronous );
     case m_generate:
@@ -988,7 +956,7 @@ int main( const int argc, const char * const argv[] )
       if( fb_opts != Fb_options() || rb_opts != Rb_options() || synchronous ||
           test_mode_mapfile_name || verify_input_size || preallocate ||
           o_direct_out || o_trunc )
-        show_error( "warning: Options -aACdDeEHIJKlMnOpPrRStTuwxXy are ignored in generate mode." );
+        show_error( "warning: Options -aACdDeEHIJKlMnOpPrRStTuwWxXy are ignored in generate mode." );
       return do_generate( opos - ipos, domain, mb_opts, iname, oname, mapname,
                           cluster, hardbs );
     case m_command:

@@ -1,5 +1,5 @@
 /* Rational - Rational number class with overflow detection
-   Copyright (C) 2005-2022 Antonio Diaz Diaz.
+   Copyright (C) 2005-2023 Antonio Diaz Diaz.
 
    This library is free software. Redistribution and use in source and
    binary forms, with or without modification, are permitted provided
@@ -26,10 +26,10 @@
 #include "rational.h"
 
 #ifndef LLONG_MAX
-#define LLONG_MAX  0x7FFFFFFFFFFFFFFFLL
+#define LLONG_MAX 0x7FFFFFFFFFFFFFFFLL
 #endif
 #ifndef LLONG_MIN
-#define LLONG_MIN  (-LLONG_MAX - 1LL)
+#define LLONG_MIN (-LLONG_MAX - 1LL)
 #endif
 #ifndef ULLONG_MAX
 #define ULLONG_MAX 0xFFFFFFFFFFFFFFFFULL
@@ -214,8 +214,10 @@ int Rational::parse( const char * const s )
    'iwidth' is the minimum width of the integer part, prefixed with spaces
    if needed.
    If 'prec' is negative, produce only the decimals needed.
+   If 'rounding', round up the last digit if the next one would be >= 5.
 */
-std::string Rational::to_decimal( const unsigned iwidth, int prec ) const
+std::string Rational::to_decimal( const unsigned iwidth, int prec,
+                                  const bool rounding ) const
   {
   if( den <= 0 ) return overflow_string( num );
 
@@ -224,7 +226,7 @@ std::string Rational::to_decimal( const unsigned iwidth, int prec ) const
   const bool truncate = ( prec < 0 );
   if( prec < 0 ) prec = -prec;
 
-  do { s += '0' + ( ipart % 10 ); ipart /= 10; } while( ipart > 0 );
+  do { s += ( ipart % 10 ) + '0'; ipart /= 10; } while( ipart > 0 );
   if( num < 0 ) s += '-';
   if( iwidth > s.size() ) s.append( iwidth - s.size(), ' ' );
   std::reverse( s.begin(), s.end() );
@@ -233,8 +235,22 @@ std::string Rational::to_decimal( const unsigned iwidth, int prec ) const
     {
     s += '.';
     while( prec > 0 && ( rest > 0 || !truncate ) )
-      { rest *= 10; s += '0' + ( rest / den ); rest %= den; --prec; }
+      { rest *= 10; s += ( rest / den ) + '0'; rest %= den; --prec; }
     }
+  if( rounding && rest * 2 >= den )		// round last decimal up
+    for( int j = s.size() - 1; j >= 0; --j )
+      {
+      if( s[j] == '.' ) continue;
+      if( s[j] >= '0' && s[j] < '9' ) { ++s[j]; break; }
+      if( s[j] == '9' ) s[j] = '0';
+      if( j > 0 && s[j-1] == '.' ) continue;
+      if( j > 0 && s[j-1] == ' ' ) { s[j-1] = '1'; break; }
+      if( j > 1 && s[j-2] == ' ' && s[j-1] == '-' )
+        { s[j-2] = '-'; s[j-1] = '1'; break; }
+      // no prev digit, prepend '1' to the first digit
+      if( j == 0 || s[j-1] < '0' || s[j-1] > '9' )
+        { s.insert( s.begin() + j, '1' ); break; }
+      }
   return s;
   }
 
@@ -250,9 +266,9 @@ std::string Rational::to_fraction( const unsigned width ) const
   std::string s;
   int n = std::abs( num ), d = den;
 
-  do { s += '0' + ( d % 10 ); d /= 10; } while( d > 0 );
+  do { s += ( d % 10 ) + '0'; d /= 10; } while( d > 0 );
   s += '/';
-  do { s += '0' + ( n % 10 ); n /= 10; } while( n > 0 );
+  do { s += ( n % 10 ) + '0'; n /= 10; } while( n > 0 );
   if( num < 0 ) s += '-';
   if( width > s.size() ) s.append( width - s.size(), ' ' );
   std::reverse( s.begin(), s.end() );

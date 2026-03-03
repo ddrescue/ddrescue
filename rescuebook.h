@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2022 Antonio Diaz Diaz.
+   Copyright (C) 2004-2023 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
 
 class Sliding_average		// Calculates the average of the last N terms
   {
-  unsigned index;
+  unsigned index;		// either index or data.size() contain N
   std::vector<long long> data;
 
 public:
@@ -65,6 +65,7 @@ struct Rb_options
   int pause_on_pass;
   int preview_lines;		// preview lines to show. 0 = disable
   int timeout;
+  bool compare_before_write;
   bool complete_only;
   bool new_bad_areas_only;
   bool noscrape;
@@ -87,11 +88,12 @@ struct Rb_options
       max_read_errors( ULONG_MAX ), max_slow_reads( ULONG_MAX ),
       cpass_bitset( 31 ), delay_slow( 30 ), max_retries( 0 ), o_direct_in( 0 ),
       pause_on_error( 0 ), pause_on_pass( 0 ), preview_lines( 0 ),
-      timeout( -1 ), complete_only( false ), new_bad_areas_only( false ),
-      noscrape( false ), notrim( false ), reopen_on_error( false ),
-      reset_slow( false ), retrim( false ), reverse( false ),
-      same_file( false ), simulated_poe( false ), sparse( false ),
-      try_again( false ), unidirectional( false ), verify_on_error( false )
+      timeout( -1 ), compare_before_write( false ), complete_only( false ),
+      new_bad_areas_only( false ), noscrape( false ), notrim( false ),
+      reopen_on_error( false ), reset_slow( false ), retrim( false ),
+      reverse( false ), same_file( false ), simulated_poe( false ),
+      sparse( false ), try_again( false ), unidirectional( false ),
+      verify_on_error( false )
       {}
 
   bool operator==( const Rb_options & o ) const
@@ -110,6 +112,7 @@ struct Rb_options
                pause_on_error == o.pause_on_error &&
                pause_on_pass == o.pause_on_pass &&
                preview_lines == o.preview_lines && timeout == o.timeout &&
+               compare_before_write == o.compare_before_write &&
                complete_only == o.complete_only &&
                new_bad_areas_only == o.new_bad_areas_only &&
                noscrape == o.noscrape && notrim == o.notrim &&
@@ -148,7 +151,7 @@ class Rescuebook : public Mapbook, public Rb_options
   long long a_rate, c_rate, first_size, last_size;
   long long iobuf_ipos;			// last pos read in iobuf, or -1
   long long last_ipos;
-  long t0, t1, ts;			// start, current, last successful
+  long long t0, t1, ts;			// start, current, last successful
   Rational tp;				// cumulated pause_on_error
   int oldlen;
   bool rates_updated, current_slow, prev_slow;

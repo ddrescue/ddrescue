@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2022 Antonio Diaz Diaz.
+   Copyright (C) 2004-2023 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@
 #include "mapbook.h"
 
 
-const char * format_time( const long t, const bool low_prec )
+const char * format_time( const long long t, const bool low_prec )
   {
   enum { buffers = 8, bufsize = 16 };
   static char buffer[buffers][bufsize];	// circle of static buffers for printf
@@ -42,10 +42,10 @@ const char * format_time( const long t, const bool low_prec )
   const int s = t % 60;
   const int m = ( t / 60 ) % 60;
   const int h = ( t / 3600 ) % 24;
-  const long d = t / 86400;
+  const long long d = t / 86400;
   int len = 0;				// max len is 11 chars (10h 10m 10s)
 
-  if( d > 0 ) len = snprintf( buf, bufsize, "%ldd", d );
+  if( d > 0 ) len = snprintf( buf, bufsize, "%lldd", d );
   if( h > 0 && len >= 0 && len <= 7 )
     len += snprintf( buf + len, bufsize - len, "%s%dh", len ? ( (h < 10) ? "  " : " " ) : "", h );
   if( m > 0 && len >= 0 && len <= 7 )
@@ -126,7 +126,7 @@ void Genbook::show_status( const long long ipos, const char * const msg,
     }
 
   if( ipos >= 0 ) last_ipos = ipos;
-  const long t2 = std::time( 0 );
+  const long long t2 = std::time( 0 );
   if( t2 < t1 )					// clock jumped back
     {
     t0 -= std::min( t0, t1 - t2 );
@@ -154,7 +154,7 @@ void Genbook::show_status( const long long ipos, const char * const msg,
       for( int i = len; i < oldlen; ++i ) std::fputc( ' ', stdout );
       oldlen = len;
       }
-    std::fflush( stdout );
+    safe_fflush( stdout );
     }
   }
 
@@ -195,7 +195,7 @@ int Genbook::do_generate( const int odes )
     if( retval == -2 ) std::fputs( "\nMapfile error", stdout );
     else if( signaled ) std::fputs( "\nInterrupted by user", stdout );
     std::fputc( '\n', stdout );
-    std::fflush( stdout );
+    safe_fflush( stdout );
     }
   if( retval == -2 ) retval = 1;		// mapfile error
   else

@@ -51,8 +51,7 @@ also periodically created (if possible). So in case of a crash you can
 resume the rescue with little recopying.
 
 The same mapfile can be used for multiple commands that copy different areas
-of the input file, and for multiple recovery attempts over different
-subsets.
+of the input file, and for multiple recovery attempts over different subsets.
 
 Because ddrescue needs to read and write at random places, it only works on
 seekable (random access) input and output files.
@@ -75,7 +74,7 @@ can be used for any kind of device supported by your kernel (ATA, SATA,
 SCSI, old MFM drives, floppy discs, or even flash media cards like SD).
 
 
-Copyright (C) 2004-2022 Antonio Diaz Diaz.
+Copyright (C) 2004-2023 Antonio Diaz Diaz.
 
 This file is free documentation: you have unlimited permission to copy,
 distribute, and modify it.

@@ -1,5 +1,5 @@
 /* Rational - Rational number class with overflow detection
-   Copyright (C) 2005-2022 Antonio Diaz Diaz.
+   Copyright (C) 2005-2023 Antonio Diaz Diaz.
 
    This library is free software. Redistribution and use in source and
    binary forms, with or without modification, are permitted provided
@@ -24,7 +24,7 @@
    In case of domain error or overflow, den is set to 0 and num is set
    to >0, <0, or 0, meaning +INF, -INF, and NAN respectively. This error
    condition can be tested with the function 'error', and can only be
-   cleared assigning a new value to the Rational.
+   cleared by assigning a new value to the Rational.
    While in error state, arithmetic operators become no ops and
    relational operators return false, except !=, which returns true.
 */
@@ -50,8 +50,7 @@ public:
 
   int numerator() const { return num; }
   int denominator() const { return den; }
-  int sign() const
-    { if( num > 0 ) return 1; if( num < 0 ) return -1; return 0; }
+  int sign() const { return ( num > 0 ) - ( num < 0 ); }
   bool error() const { return ( den <= 0 ); }	// true if in error state
 
   const Rational & operator+() const { return *this; }	// unary plus const
@@ -130,7 +129,8 @@ public:
     { if( den > 0 ) return ( num / den ); else return num; }
 
   int parse( const char * const s );		// returns parsed size
-  std::string to_decimal( const unsigned iwidth = 1, int prec = -2 ) const;
+  std::string to_decimal( const unsigned iwidth = 1, int prec = -2,
+                          const bool rounding = false ) const;
   std::string to_fraction( const unsigned width = 1 ) const;
   };
 

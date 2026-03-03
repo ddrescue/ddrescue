@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2013-2022 Antonio Diaz Diaz.
+   Copyright (C) 2013-2023 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -30,15 +31,15 @@
 
 namespace {
 
-const char * format_time_dhms( const long t )
+const char * format_time_dhms( const long long t )
   {
-  static char buf[32];
+  static char buf[64];			// keep gcc quiet
   const int s = t % 60;
   const int m = ( t / 60 ) % 60;
   const int h = ( t / 3600 ) % 24;
-  const long d = t / 86400;
+  const long long d = t / 86400;
 
-  if( d ) snprintf( buf, sizeof buf, "%ldd:%02dh:%02dm:%02ds", d, h, m, s );
+  if( d ) snprintf( buf, sizeof buf, "%lldd:%02dh:%02dm:%02ds", d, h, m, s );
   else if( h ) snprintf( buf, sizeof buf, "%dh:%02dm:%02ds", h, m, s );
   else if( m ) snprintf( buf, sizeof buf, "%dm:%02ds", m, s );
   else snprintf( buf, sizeof buf, "%ds", s );
@@ -101,7 +102,8 @@ bool Event_logger::echo_msg( const char * const msg )
   }
 
 
-bool Event_logger::print_msg( const long time, const char * const percent_rescued,
+bool Event_logger::print_msg( const long long time,
+                              const char * const percent_rescued,
                               const char * const msg )
   {
   if( f && !error &&
@@ -112,7 +114,8 @@ bool Event_logger::print_msg( const long time, const char * const percent_rescue
   }
 
 
-bool Event_logger::print_eor( const long time, const char * const percent_rescued,
+bool Event_logger::print_eor( const long long time,
+                              const char * const percent_rescued,
                               const long long current_pos,
                               const char * const current_status_name )
   {
@@ -139,7 +142,7 @@ bool Rate_logger::open_file()
   }
 
 
-bool Rate_logger::print_line( const long time, const long long ipos,
+bool Rate_logger::print_line( const long long time, const long long ipos,
                               const long long a_rate, const long long c_rate,
                               const unsigned long bad_areas,
                               const long long bad_size )
@@ -147,7 +150,7 @@ bool Rate_logger::print_line( const long time, const long long ipos,
   if( f && !error && time > last_time )
     {
     last_time = time;
-    if( std::fprintf( f, "%2ld  0x%08llX  %8lld  %8lld  %7lu  %8lld\n",
+    if( std::fprintf( f, "%2lld  0x%08llX  %8lld  %8lld  %7lu  %8lld\n",
                       time, ipos, c_rate, a_rate, bad_areas, bad_size ) < 0 )
       error = true;
     }
@@ -181,7 +184,7 @@ bool Read_logger::print_line( const long long ipos, const long long size,
   }
 
 
-bool Read_logger::print_msg( const long time, const char * const msg )
+bool Read_logger::print_msg( const long long time, const char * const msg )
   {
   if( f && !error &&
       std::fprintf( f, "%s# %s  %s\n", prev_is_msg ? "" : "\n",
@@ -192,7 +195,7 @@ bool Read_logger::print_msg( const long time, const char * const msg )
   }
 
 
-bool Read_logger::print_time( const long time )
+bool Read_logger::print_time( const long long time )
   {
   if( f && !error && time > 0 &&
       std::fprintf( f, "# %s\n", format_time_dhms( time ) ) < 0 )

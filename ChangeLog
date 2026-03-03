@@ -1,3 +1,17 @@
+2023-01-23  Antonio Diaz Diaz  <antonio@gnu.org>
+
+	* Version 1.27 released.
+	* command_mode.cc (do_commands): Fix flush stdout after each command.
+	  (Reported by Jeffrey Bosboom).
+	* New option '-W, --compare-before-write'.
+	 (Suggested by Kajetan Harald Hinner and Petr Slansky).
+	* main_common.cc (show_option_error):
+	  New function showing argument and option name.
+	* main.cc: Remove synonym '--direct'.
+	* Use 'long long' instead of 'long' for time variables.
+	* loggers.cc: Missing '#include <cstdlib>'.
+	* Fix two compiler warnings reported by Christian Franke.
+
 2022-01-21  Antonio Diaz Diaz  <antonio@gnu.org>
 
 	* Version 1.26 released.
@@ -42,14 +56,14 @@
 
 	* Version 1.24 released.
 	* New option '--command-mode'.
-	* Implement mapfile backup.
+	* Implement mapfile backup. (Suggested by Joe Kickman).
 	* ddrescue.texi: Document final contents of bad areas in outfile.
 	* configure: Accept appending to CXXFLAGS; 'CXXFLAGS+=OPTIONS'.
 
 2018-02-13  Antonio Diaz Diaz  <antonio@gnu.org>
 
 	* Version 1.23 released.
-	* rescuebook.cc (trim_errors): Fix wrong change to non-scraped.
+	* rescuebook.cc (trim_errors): Fix wrong status change to non-scraped.
 	* New option '--same-file'.
 	* ddrescuelog.cc: New option '--shift'.
 	* fillbook.cc (fill_block): Write location data as one line.
@@ -67,7 +81,7 @@
 	* New option '--reset-slow'.
 	* New option '--log-events'.
 	* New option '--mapfile-interval'.
-	* New option '--pause-on-error'.
+	* New option '--pause-on-error'. (Suggested by Dmitri Kostin).
 	* Rename option '--pause' to '--pause-on-pass'.
 	* Rename option '--max-errors' to '--max-bad-areas'.
 	* Rename 'errsize' to 'bad_size' and 'errors' to 'bad_areas'
@@ -161,8 +175,9 @@
 	* New option '-H, --test-mode' to simulate read errors.
 	* New option '-L, --loose-domain' (both ddrescue and ddrescuelog).
 	* New option '-N, --no-trim' to disable trimming of damaged areas.
-	* New option '-O, --reopen-on-error'.
+	* New option '-O, --reopen-on-error'. (Suggested by Paul L Daniels).
 	* New options '-1, --log-rates' and '-2, --log-reads'.
+	 (Suggested by Alexander Sashnov and Paul L Daniels).
 	* Extend '-K, --skip-size' with maximum and disable values.
 	* Change long name of option '-r' to '--retry-passes'.
 	* Change short name of option '--generate-mode' to '-G'.
@@ -462,7 +477,7 @@
 	* Version 0.1 released.
 
 
-Copyright (C) 2004-2022 Antonio Diaz Diaz.
+Copyright (C) 2004-2023 Antonio Diaz Diaz.
 
 This file is a collection of facts, and thus it is not copyrightable,
 but just in case, you have unlimited permission to copy, distribute, and

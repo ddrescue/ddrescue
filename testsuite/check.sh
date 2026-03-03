@@ -1,6 +1,6 @@
 #! /bin/sh
 # check script for GNU ddrescue - Data recovery tool
-# Copyright (C) 2009-2022 Antonio Diaz Diaz.
+# Copyright (C) 2009-2023 Antonio Diaz Diaz.
 #
 # This script is free software: you have unlimited permission
 # to copy, distribute, and modify it.
@@ -355,6 +355,15 @@ printf "c 0 72776\nf\n" | "${DDRESCUE}" --command-mode "${in4}" out mapfile \
 	> /dev/null || test_failed $LINENO
 cmp "${in}" out || test_failed $LINENO
 "${DDRESCUELOG}" -d mapfile || test_failed $LINENO
+
+"${DDRESCUE}" -q "${in}" out --compare-before-write
+cmp "${in}" out || test_failed $LINENO
+cat "${in2}" > out || framework_failure
+"${DDRESCUE}" -q "${in}" out --compare-before-write
+cmp "${in}" out || test_failed $LINENO
+rm -f out || framework_failure
+"${DDRESCUE}" -q "${in}" out --compare-before-write
+cmp "${in}" out || test_failed $LINENO
 
 printf "\ntesting ddrescuelog-%s..." "$2"
 

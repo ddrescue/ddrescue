@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2022 Antonio Diaz Diaz.
+   Copyright (C) 2004-2023 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -19,8 +19,9 @@ int verbosity = 0;
 
 namespace {
 
-const char * const program_year = "2022";
+const char * const program_year = "2023";
 std::string command_line;
+const char * const inval_t_msg = "Invalid type in argument of";
 
 
 void show_version()
@@ -30,6 +31,15 @@ void show_version()
   std::printf( "License GPLv2+: GNU GPL version 2 or later <http://gnu.org/licenses/gpl.html>\n"
                "This is free software: you are free to change and redistribute it.\n"
                "There is NO WARRANTY, to the extent permitted by law.\n" );
+  }
+
+
+void show_option_error( const char * const arg, const char * const msg,
+                        const char * const option_name )
+  {
+  if( verbosity >= 0 )
+    std::fprintf( stderr, "%s: '%s': %s option '%s'.\n",
+                  program_name, arg, msg, option_name );
   }
 
 
@@ -44,12 +54,8 @@ long long getnum( const char * const arg, const char * const option_name,
   errno = 0;
   long long result = strtoll( arg, &tail, 0 );
   if( tail == arg )
-    {
-    if( verbosity >= 0 )
-      std::fprintf( stderr, "%s: Bad or missing numerical argument in "
-                    "option '%s'.\n", program_name, option_name );
-    std::exit( 1 );
-    }
+    { show_option_error( arg, "Bad or missing numerical argument in",
+                         option_name ); std::exit( 1 ); }
 
   if( !errno && tail[0] )
     {
@@ -70,27 +76,25 @@ long long getnum( const char * const arg, const char * const option_name,
       case 'k': if( tail[0] != 'i' ) exponent = 1; break;
       case 'B':
       case 's': usuf = *p; exponent = 0; break;
-      default : if( tailp ) { tail = p; exponent = 0; } break;
+      default : if( tailp ) { tail = p; exponent = 0; }
       }
     if( exponent > 1 && tail[0] == 'i' ) { ++tail; factor = 1024; }
     if( exponent > 0 && usuf == 0 && ( tail[0] == 'B' || tail[0] == 's' ) )
       { usuf = tail[0]; ++tail; }
     if( exponent < 0 || ( usuf == 's' && hardbs <= 0 ) ||
         ( !tailp && tail[0] != 0 ) )
-      {
-      if( verbosity >= 0 )
-        std::fprintf( stderr, "%s: Bad multiplier in numerical argument of "
-                      "option '%s'.\n", program_name, option_name );
-      std::exit( 1 );
-      }
+      { show_option_error( arg, "Bad multiplier in numerical argument of",
+                           option_name ); std::exit( 1 ); }
     for( int i = 0; i < exponent; ++i )
       {
-      if( LLONG_MAX / factor >= llabs( result ) ) result *= factor;
+      if( ( result >= 0 && LLONG_MAX / factor >= result ) ||
+          ( result < 0 && LLONG_MIN / factor <= result ) ) result *= factor;
       else { errno = ERANGE; break; }
       }
     if( usuf == 's' )
       {
-      if( LLONG_MAX / hardbs >= llabs( result ) ) result *= hardbs;
+      if( ( result >= 0 && LLONG_MAX / hardbs >= result ) ||
+          ( result < 0 && LLONG_MIN / hardbs <= result ) ) result *= hardbs;
       else errno = ERANGE;
       }
     }
@@ -98,8 +102,8 @@ long long getnum( const char * const arg, const char * const option_name,
   if( errno )
     {
     if( verbosity >= 0 )
-      std::fprintf( stderr, "%s: Numerical argument out of limits [%s,%s] "
-                    "in option '%s'.\n", program_name, format_num3( llimit ),
+      std::fprintf( stderr, "%s: '%s': Value out of limits [%s,%s] in "
+                    "option '%s'.\n", program_name, arg, format_num3( llimit ),
                     format_num3( ulimit ), option_name );
     std::exit( 1 );
     }
@@ -108,25 +112,20 @@ long long getnum( const char * const arg, const char * const option_name,
   }
 
 
-bool check_types( std::string & types, const char * const option_name,
-                  const bool allow_l = false )
+bool check_types( const char * const arg, std::string & types,
+                  const char * const option_name, const bool allow_l )
   {
-  bool error = false;
   bool write_location_data = false;
   for( int i = types.size(); i > 0; )
     {
-    if( types[--i] == 'l' )
-      { if( !allow_l ) { error = true; break; }
-        write_location_data = true; types.erase( i, 1 ); continue; }
-    if( !Sblock::isstatus( types[i] ) ) { error = true; break; }
+    if( types[--i] == 'l' && allow_l )
+      { write_location_data = true; types.erase( i, 1 ); continue; }
+    if( !Sblock::isstatus( types[i] ) )
+      { show_option_error( arg, inval_t_msg, option_name ); std::exit( 1 ); }
     }
-  if( types.empty() || error )			// types must not be empty
-    {
-    if( verbosity >= 0 )
-      std::fprintf( stderr, "%s: Invalid type in argument of option '%s'.\n",
-                    program_name, option_name );
-    std::exit( 1 );
-    }
+  if( types.empty() )			// types must not be empty
+    { show_option_error( arg, "Missing type in argument of", option_name );
+      std::exit( 1 ); }
   return write_location_data;
   }
 
@@ -156,9 +155,9 @@ void set_name( const char ** name, const char * new_name,
   }
 
 
-const char * get_timestamp( const long t = 0 )
+const char * format_timestamp( const long long t = 0 )
   {
-  static char buf[80];
+  static char buf[64];
   const time_t tt = t ? t : std::time( 0 );
   const struct tm * const tm = std::localtime( &tt );
   if( !tm || std::strftime( buf, sizeof buf, "%Y-%m-%d %H:%M:%S", tm ) == 0 )
@@ -215,9 +214,9 @@ int not_writable( const char * const mapname )
   { show_file_error( mapname, "Mapfile is not writable." ); return 1; }
 
 
-long initial_time()
+long long initial_time()
   {
-  static long initial_time_ = 0;
+  static long long initial_time_ = 0;
 
   if( initial_time_ == 0 ) initial_time_ = std::time( 0 );
   return initial_time_;
@@ -226,9 +225,9 @@ long initial_time()
 
 bool write_file_header( FILE * const f, const char * const filetype )
   {
-  static std::string timestamp;
+  static std::string timestamp;		// same inital timestamp on all files
 
-  if( timestamp.empty() ) timestamp = get_timestamp( initial_time() );
+  if( timestamp.empty() ) timestamp = format_timestamp( initial_time() );
   return ( std::fprintf( f, "# %s. Created by %s version %s\n"
                             "# Command line: %s\n"
                             "# Start time:   %s\n",
@@ -239,7 +238,7 @@ bool write_file_header( FILE * const f, const char * const filetype )
 
 bool write_timestamp( FILE * const f )
   {
-  const char * const timestamp = get_timestamp();
+  const char * const timestamp = format_timestamp();
 
   return ( !timestamp || !timestamp[0] ||
            std::fprintf( f, "# Current time: %s\n", timestamp ) >= 0 );
@@ -248,9 +247,9 @@ bool write_timestamp( FILE * const f )
 
 bool write_final_timestamp( FILE * const f )
   {
-  static std::string timestamp;
+  static std::string timestamp;		// same final timestamp on all files
 
-  if( timestamp.empty() ) timestamp = get_timestamp();
+  if( timestamp.empty() ) timestamp = format_timestamp();
   return ( std::fprintf( f, "# End time:     %s\n", timestamp.c_str() ) >= 0 );
   }
 
@@ -281,12 +280,12 @@ const char * format_num( long long num, long long limit,
   }
 
 
-// separate large numbers >= 100_000 in groups of 3 digits using '_'
+// separate numbers of 5 or more digits in groups of 3 digits using '_'
 const char * format_num3( long long num )
   {
   const char * const si_prefix = "kMGTPEZY";
   const char * const binary_prefix = "KMGTPEZY";
-  enum { buffers = 8, bufsize = 4 * sizeof (long long) };
+  enum { buffers = 8, bufsize = 4 * sizeof num };
   static char buffer[buffers][bufsize];	// circle of static buffers for printf
   static int current = 0;
 
@@ -294,20 +293,20 @@ const char * format_num3( long long num )
   char * p = buf + bufsize - 1;		// fill the buffer backwards
   *p = 0;	// terminator
   const bool negative = num < 0;
-  if( negative ) num = -num;
   char prefix = 0;			// try binary first, then si
-  for( int i = 0; i < 8 && num >= 1024 && num % 1024 == 0; ++i )
+  for( int i = 0; i < 8 && num != 0 && ( num / 1024 ) * 1024 == num; ++i )
     { num /= 1024; prefix = binary_prefix[i]; }
   if( prefix ) *(--p) = 'i';
   else
-    for( int i = 0; i < 8 && num >= 1000 && num % 1000 == 0; ++i )
+    for( int i = 0; i < 8 && num != 0 && ( num / 1000 ) * 1000 == num; ++i )
       { num /= 1000; prefix = si_prefix[i]; }
   if( prefix ) *(--p) = prefix;
-  const bool split = num >= 100000;
+  const bool split = num >= 10000 || num <= -10000;
 
   for( int i = 0; ; )
     {
-    *(--p) = num % 10 + '0'; num /= 10; if( num == 0 ) break;
+    const long long onum = num; num /= 10;
+    *(--p) = llabs( onum - ( 10 * num ) ) + '0'; if( num == 0 ) break;
     if( split && ++i >= 3 ) { i = 0; *(--p) = '_'; }
     }
   if( negative ) *(--p) = '-';
@@ -315,9 +314,12 @@ const char * format_num3( long long num )
   }
 
 
-/* Show the fraction "num/den" as a percentage with "prec" decimals.
-   If 'prec' is negative, show only the decimals needed.
-   If 'rounding', the last digit is rounded up if the next would be >= 5.
+/* Return a string representing the fraction 'num/den' as a percentage with
+   'prec' decimals.
+   'iwidth' is the minimum width of the integer part, prefixed with spaces
+   if needed.
+   If 'prec' is negative, produce only the decimals needed.
+   If 'rounding', round up the last digit if the next one would be >= 5.
 */
 const char * format_percentage( long long num, long long den,
                                 const int iwidth, int prec,
@@ -349,23 +351,22 @@ const char * format_percentage( long long num, long long den,
       {
       buf[i++] = '.';
       while( prec > 0 && ( rest > 0 || !trunc ) && i < sizeof( buf ) - 2 )
-        { rest *= 10; buf[i++] = ( rest / den ) + '0';
-          rest %= den; --prec; }
+        { rest *= 10; buf[i++] = ( rest / den ) + '0'; rest %= den; --prec; }
       }
     if( rounding && rest * 2 >= den )		// round last decimal up
       for( int j = i - 1; j >= 0; --j )
         {
         if( buf[j] == '.' ) continue;
         if( buf[j] >= '0' && buf[j] < '9' ) { ++buf[j]; break; }
-        if( buf[j] == '9' ) buf[j] ='0';
+        if( buf[j] == '9' ) buf[j] = '0';
         if( j > 0 && buf[j-1] == '.' ) continue;
-        if( j > 0 && buf[j-1] == ' ' ) { buf[j-1] ='1'; break; }
+        if( j > 0 && buf[j-1] == ' ' ) { buf[j-1] = '1'; break; }
         if( j > 1 && buf[j-2] == ' ' && buf[j-1] == '-' )
-          { buf[j-2] ='-'; buf[j-1] ='1'; break; }
+          { buf[j-2] = '-'; buf[j-1] = '1'; break; }
         if( j == 0 || buf[j-1] < '0' || buf[j-1] > '9' )	// no prev digit
           {
           for( int k = i - 1; k > j; --k ) buf[k] = buf[k-1];
-          buf[j] ='1'; break;		// prepend a '1' to the first digit
+          buf[j] = '1'; break;		// prepend '1' to the first digit
           }
         }
     }

@@ -1,5 +1,5 @@
 /* GNU ddrescue - Data recovery tool
-   Copyright (C) 2004-2022 Antonio Diaz Diaz.
+   Copyright (C) 2004-2023 Antonio Diaz Diaz.
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -16,7 +16,7 @@
 */
 
 #ifndef LLONG_MAX
-#define LLONG_MAX  0x7FFFFFFFFFFFFFFFLL
+#define LLONG_MAX 0x7FFFFFFFFFFFFFFFLL
 #endif
 
 // requires '#include <cstdio>' for 'FILE *'
@@ -71,7 +71,7 @@ public:
   bool operator!=( const Block & b ) const
     { return pos_ != b.pos_ || size_ != b.size_; }
 
-  bool operator<( const Block & b ) const { return ( end() <= b.pos() ); }
+  bool operator<( const Block & b ) const { return ( end() <= b.pos_ ); }
 
   bool follows( const Block & b ) const
     { return ( pos_ == b.end() ); }
@@ -318,7 +318,7 @@ void internal_error( const char * const msg );
 int empty_domain();
 int not_readable( const char * const mapname );
 int not_writable( const char * const mapname );
-long initial_time();
+long long initial_time();
 bool write_file_header( FILE * const f, const char * const filetype );
 bool write_timestamp( FILE * const f );
 bool write_final_timestamp( FILE * const f );
